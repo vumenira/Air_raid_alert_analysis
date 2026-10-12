@@ -1,0 +1,175 @@
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Opus 5.5 · Claude API
+ ▝▝   ▝▝   ~/projects/Air_raid_alert_analysis
+
+
+❯ /clear                                                                        
+
+❯ Hello you will act as a judje of AI agentic school during the candidate       
+  selection process. You have to examine this repo's code and project, and      
+  critique it constructively. Tell me what the project lacks, what are it's     
+  weak and strong sides and how to improve project itself and it's              
+  presentation. The original task is:                                           
+    Congratulations! Your Stage 1 application demonstrated the critical         
+  thinking and agentic potential we are looking for. You are officially invited 
+  to Stage 2 of the selection pipeline.                                         
+                                                                                
+    You have until Monday, 12 October 2026, 23:59 Kyiv time to complete a mini  
+  pet-project in Python solving a real-world defense problem: Time Series       
+  Analysis of air raid alerts in Ukraine.                                       
+                                                                                
+    We do not expect you to be a domain expert in time series forecasting or    
+  defense analytics. We expect you to use AI to bridge that gap. In this task,  
+  AI is not an ornament. It must be your primary engineering tool.              
+                                                                                
+    Data and evaluation. Work with the most recent data available, and evaluate 
+  your solution on the latest period. Make sure there is no data leakage:       
+  nothing your model is trained on or uses as an input may come from after the  
+  time at which the forecast is made.                                           
+                                                                                
+    Optional: text and media data. You are encouraged, but not required, to go  
+  beyond the alert history and use text or media data, for example news,        
+  official statements or public Telegram channels. The same rule applies: use   
+  only content that was published before the time at which the forecast is      
+  made.                                                                         
+                                                                                
+    Submission Requirements                                                     
+                                                                                
+    You must submit your work via the form linked below. Your submission must   
+  include three distinct parts:                                                 
+                                                                                
+    The artifact: a link to your GitHub repository containing the final,        
+  working Python code.                                                          
+    The AI log: a full text export of your conversation history with your       
+  chosen AI tool (Claude, ChatGPT, Gemini, etc.).                               
+    The reflection: A short summary (~100 words) answering three questions:     
+  What went wrong? How did you adjust your approach? Why is your final version  
+  better than your first attempt? Please submit as plain text, as well.         
+    Deadline: Monday, 12 October 2026, 23:59 Kyiv time (EEST).                  
+                                                                                
+    We evaluate the process, not just the result. Your AI interaction log is    
+  our primary signal. We are looking for candidates who actively iterate,       
+  challenge model hallucinations, correct errors, and guide the AI toward a     
+  functional architecture rather than blindly accepting the first output.       
+                                                                                
+    Top applicants who successfully pass this stage will be invited to Stage 3, 
+  which consists of a technical and motivational screening with two             
+  interviewers, where we will also discuss your solution.                       
+    Do not change the code, but you may create FEEDBACK.md with your            
+  conclusions                                                                   
+
+● I'll review the repo the way a selection judge would. I'll start with the
+  layout, docs and AI log.
+
+  Read 1 file, ran 2 shell commands (ctrl+o to expand)
+
+● Core pipeline read. Next I'll check the metrics, run the tests, and look for
+  secrets in the conversation logs, since those get published.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Tests pass (4/4) and no API key appears in the logs. The AI log is the main
+  graded signal, so next I'll pull out every user turn to judge the process.
+
+  Searched for 2 patterns, ran 4 shell commands (ctrl+o to expand)
+
+● I'll test whether a simple recent-rate baseline using starts_7d closes most of
+  the gap to LightGBM, running this quickly in the scratchpad without modifying
+  the repo.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Still reviewing. I'm now testing whether a simple "recent activity" baseline
+  nearly matches the LightGBM model. The first run just needed the project on
+  the Python path.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Done with the investigation. Writing FEEDBACK.md now.
+
+● Write(FEEDBACK.md)
+  ⎿  Wrote 139 lines to FEEDBACK.md
+      1 # Reviewer feedback (mock Stage 2 judging)
+      3 Reviewed on 2026-10-12 against the Stage 2 brief. What I looked a
+        t: all code in `training/`, `app/server.py`, `tests/`, `explorati
+        , and both conversation logs. I ran `uv run pytest`: 4/4 passed i
+        n about 35 s. I did not launch the dashboard in a browser.
+      5 ## Verdict in one paragraph
+      6 
+        better than most candidates will manage: `truncate_at` plus an eq
+        uality test, a negative control, and a mutation test showing the 
+        alidation windows with day-block boot
+     … +268 lines (ctrl+o to expand)
+
+● I wrote FEEDBACK.md with the full review and left the code unchanged. The
+  leakage tests pass (4/4). I didn't open the dashboard in a browser.
+
+  Verdict: the engineering is strong, but the process signal (which the brief
+  calls its main criterion) and the presentation are weaker.
+
+  Strengths
+  - No data leakage, and it's proven: the tests rebuild every feature using only
+    what was knowable at that moment and check nothing changes. A
+    negative-control test, plus a deliberately injected leak in the log, shows
+    the tests would catch a real one.
+  - Latest data used: the official file stops on 2026-09-07. That was caught,
+    and the volunteer file was used so the test period runs to 12 Oct.
+  - Careful feature selection: each idea was tested on two separate validation
+    windows, with uncertainty that accounts for alerts coming in waves.
+  - Failed ideas are documented: weather, sin/cos encoding and the "+5 min"
+    count were all tested and rejected with numbers.
+  - The product works: the dashboard reuses the training feature code, and the
+    trained models are committed, so judges don't need to retrain.
+
+  Main weaknesses
+  1. The AI caught most of the mistakes, not you. It corrected its own wrong
+     Luhansk claim and tested its own leakage test. Your contributions are
+     mostly good questions and feature ideas. At the end of log 2 the AI calls
+     the duration model "clearly better" than the baseline on a 0.7-minute MAE
+     gain, and nobody challenged it.
+  2. The start-model baseline is weak. I checked this with a scratchpad script:
+
+  | Model                                                          | Log loss
+  (lower is better) |
+  |----------------------------------------------------------------|------------
+  ----------------|
+  | Your README baseline                                           | 0.525
+                 |
+  | Logistic regression on one feature (alerts in the last 7 days) | 0.466
+                 |
+  | LightGBM (yours)                                               | 0.455
+                 |
+     About 85% of the claimed gain is just "recent activity". The alert rate
+     rose from 16% in training to 24.5% in the test weeks, and the year-long
+     baseline misses that.
+  3. The training start date (2025-10-01) was never tested. Its code comment
+     points to CLAUDE.md, which doesn't explain it.
+  4. "Now" mode mixes fresh and stale data: the neighbour features still come
+     from the daily file while the map shows live state. Live alerts are also
+     treated as just started, so the expected end time is too late.
+  5. Weibull fits durations better than log-normal on validation, but log-normal
+     ships.
+  6. There's no descriptive analysis (trends, hour × weekday patterns), though
+     the brief says "Time Series Analysis".
+  7. The optional Telegram data was dropped.
+
+  Presentation
+  - The repo has zero commits and the branch is master, so judges will see no
+    history.
+  - There's no screenshot in the README, and its Layout section is out of date.
+  - The logs are hard to audit: one was restored from files, and the other has
+    tool outputs collapsed.
+
+  Before 23:59 tonight:
+  1. Commit in a few logical chunks and push to main.
+  2. Add a screenshot to the README.
+  3. In a new logged session where you lead, add the 7-day baseline and
+     challenge the "clearly better" claim.
+  4. Base the reflection on that correction.
+
+  The file also includes a priority list, likely Stage 3 interview questions,
+  and a scorecard.
+
+✻ Crunched for 3m 15s · done 9:14 PM
+
+※ recap: I reviewed your air raid alert project as a mock Stage 2 judge and wrote everything up in FEEDBACK.md. Your next step is to commit the repo in a few chunks and push it to main before 23:59 tonight.

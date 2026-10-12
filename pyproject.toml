@@ -1,0 +1,23 @@
+[project]
+name = "air-raid-alerts"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.143.0",
+    "lifelines>=0.30.3",
+    "lightgbm>=4.7.0",
+    "numpy>=2.5.4",
+    "pandas>=2.3.3",
+    "pyarrow>=26.0.0",
+    "python-dotenv>=1.2.4",
+    "scikit-learn>=1.9.1",
+    "uvicorn>=0.54.0",
+    "wandb>=0.30.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.13.1",
+    "matplotlib>=3.11",
+    "pytest>=9.1.1",
+]

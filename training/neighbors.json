@@ -1,0 +1,166 @@
+{
+ "Cherkaska oblast": [
+  "Kirovohradska oblast",
+  "Kyivska oblast",
+  "Poltavska oblast",
+  "Vinnytska oblast"
+ ],
+ "Chernihivska oblast": [
+  "Kyivska oblast",
+  "Poltavska oblast",
+  "Sumska oblast"
+ ],
+ "Chernivetska oblast": [
+  "Ivano-Frankivska oblast",
+  "Khmelnytska oblast",
+  "Ternopilska oblast",
+  "Vinnytska oblast"
+ ],
+ "Crimea": [
+  "Khersonska oblast",
+  "Sevastopol"
+ ],
+ "Dnipropetrovska oblast": [
+  "Donetska oblast",
+  "Kharkivska oblast",
+  "Khersonska oblast",
+  "Kirovohradska oblast",
+  "Mykolaivska oblast",
+  "Poltavska oblast",
+  "Zaporizka oblast"
+ ],
+ "Donetska oblast": [
+  "Dnipropetrovska oblast",
+  "Kharkivska oblast",
+  "Luhanska oblast",
+  "Zaporizka oblast"
+ ],
+ "Ivano-Frankivska oblast": [
+  "Chernivetska oblast",
+  "Lvivska oblast",
+  "Ternopilska oblast",
+  "Zakarpatska oblast"
+ ],
+ "Kharkivska oblast": [
+  "Dnipropetrovska oblast",
+  "Donetska oblast",
+  "Luhanska oblast",
+  "Poltavska oblast",
+  "Sumska oblast"
+ ],
+ "Khersonska oblast": [
+  "Crimea",
+  "Dnipropetrovska oblast",
+  "Mykolaivska oblast",
+  "Odeska oblast",
+  "Zaporizka oblast"
+ ],
+ "Khmelnytska oblast": [
+  "Chernivetska oblast",
+  "Rivnenska oblast",
+  "Ternopilska oblast",
+  "Vinnytska oblast",
+  "Zhytomyrska oblast"
+ ],
+ "Kirovohradska oblast": [
+  "Cherkaska oblast",
+  "Dnipropetrovska oblast",
+  "Mykolaivska oblast",
+  "Odeska oblast",
+  "Poltavska oblast",
+  "Vinnytska oblast"
+ ],
+ "Kyiv City": [
+  "Kyivska oblast"
+ ],
+ "Kyivska oblast": [
+  "Cherkaska oblast",
+  "Chernihivska oblast",
+  "Kyiv City",
+  "Poltavska oblast",
+  "Vinnytska oblast",
+  "Zhytomyrska oblast"
+ ],
+ "Luhanska oblast": [
+  "Donetska oblast",
+  "Kharkivska oblast"
+ ],
+ "Lvivska oblast": [
+  "Ivano-Frankivska oblast",
+  "Rivnenska oblast",
+  "Ternopilska oblast",
+  "Volynska oblast",
+  "Zakarpatska oblast"
+ ],
+ "Mykolaivska oblast": [
+  "Dnipropetrovska oblast",
+  "Khersonska oblast",
+  "Kirovohradska oblast",
+  "Odeska oblast"
+ ],
+ "Odeska oblast": [
+  "Khersonska oblast",
+  "Kirovohradska oblast",
+  "Mykolaivska oblast",
+  "Vinnytska oblast"
+ ],
+ "Poltavska oblast": [
+  "Cherkaska oblast",
+  "Chernihivska oblast",
+  "Dnipropetrovska oblast",
+  "Kharkivska oblast",
+  "Kirovohradska oblast",
+  "Kyivska oblast",
+  "Sumska oblast"
+ ],
+ "Rivnenska oblast": [
+  "Khmelnytska oblast",
+  "Lvivska oblast",
+  "Ternopilska oblast",
+  "Volynska oblast",
+  "Zhytomyrska oblast"
+ ],
+ "Sevastopol": [
+  "Crimea"
+ ],
+ "Sumska oblast": [
+  "Chernihivska oblast",
+  "Kharkivska oblast",
+  "Poltavska oblast"
+ ],
+ "Ternopilska oblast": [
+  "Chernivetska oblast",
+  "Ivano-Frankivska oblast",
+  "Khmelnytska oblast",
+  "Lvivska oblast",
+  "Rivnenska oblast"
+ ],
+ "Vinnytska oblast": [
+  "Cherkaska oblast",
+  "Chernivetska oblast",
+  "Khmelnytska oblast",
+  "Kirovohradska oblast",
+  "Kyivska oblast",
+  "Odeska oblast",
+  "Zhytomyrska oblast"
+ ],
+ "Volynska oblast": [
+  "Lvivska oblast",
+  "Rivnenska oblast"
+ ],
+ "Zakarpatska oblast": [
+  "Ivano-Frankivska oblast",
+  "Lvivska oblast"
+ ],
+ "Zaporizka oblast": [
+  "Dnipropetrovska oblast",
+  "Donetska oblast",
+  "Khersonska oblast"
+ ],
+ "Zhytomyrska oblast": [
+  "Khmelnytska oblast",
+  "Kyivska oblast",
+  "Rivnenska oblast",
+  "Vinnytska oblast"
+ ]
+}

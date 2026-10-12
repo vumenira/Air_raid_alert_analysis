@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Air Raid Forecast</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark"></span>AIR RAID FORECAST <span class="muted">// UKRAINE · OBLAST LEVEL</span></div>
+  <div class="mode" role="tablist">
+    <button id="mode-replay" class="seg active" role="tab">Replay</button>
+    <button id="mode-now" class="seg" role="tab">Now</button>
+  </div>
+  <div class="timeline" id="timeline">
+    <button id="play" class="icon-btn" title="Play / pause">▶</button>
+    <input id="slider" type="range" min="0" max="0" value="0" aria-label="Forecast time">
+  </div>
+  <div class="clock">
+    <div id="clock-kyiv" class="mono big">—</div>
+    <div id="clock-sub" class="mono muted small">—</div>
+  </div>
+</header>
+
+<main class="grid">
+  <section class="panel left">
+    <div class="panel-head">Risk ranking <span class="muted">P(alert starts ≤ 1 h)</span></div>
+    <ol id="ranking" class="ranking"></ol>
+  </section>
+
+  <section class="panel map-panel">
+    <div class="panel-head">
+      <span>Forecast map</span>
+      <span id="status-line" class="muted small"></span>
+    </div>
+    <div id="map" class="map"></div>
+    <div class="legend">
+      <div class="legend-ramp"><span>0%</span><div id="ramp" class="ramp"></div><span>80%+</span></div>
+      <div class="legend-item"><span class="swatch active-swatch"></span>Alert active · time = most likely end</div>
+      <div class="legend-item replay-only"><span class="swatch truth-swatch"></span>Alert started within the hour (actual)</div>
+      <div class="legend-item"><span class="swatch perm-swatch"></span>Permanent alert / no model</div>
+    </div>
+  </section>
+
+  <section class="panel right">
+    <div class="panel-head" id="detail-title">Select a region</div>
+    <div id="detail" class="detail"></div>
+  </section>
+
+  <section class="bottom">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="mode tabs" id="bottom-tabs">
+          <button class="seg active" data-view="today">Today</button>
+          <button class="seg" data-view="week">Last 7 days</button>
+        </div>
+        <span id="glance-note" class="muted small"></span>
+      </div>
+      <div id="kpis" class="kpis"></div>
+    </div>
+    <div class="panel chart-card"><div class="panel-head" id="c1-head"></div><div id="c1" class="chart"></div></div>
+    <div class="panel chart-card wide"><div class="panel-head" id="c2-head"></div><div id="c2" class="chart"></div></div>
+    <div class="panel chart-card"><div class="panel-head" id="c3-head"></div><div id="c3" class="chart"></div></div>
+  </section>
+</main>
+<div id="tooltip" class="tooltip" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

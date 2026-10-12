@@ -1,0 +1,2756 @@
+Rendered from raw Claude Code session files by claude_conversation/render_jsonl.py (tool outputs capped at 150 lines; thinking blocks omitted).
+
+######## session 76d6f6f3-0e56-4155-9004-c2e792e4f300 ########
+
+==== USER  (2026-10-12 15:40:02 UTC) ====
+/clear
+
+==== USER  (2026-10-12 16:07:52 UTC) ====
+Hello, I'm working on a project that does the analytics about air raid alerts in Ukraine reads the @README.md and @CLAUDE.md to get some context.
+what I want from you is to do a couple of fixes for the UI and some architectural changes for the model.
+In the UI on the bottom panel, there is three buttons, day, week, and model. Delete the model one, it's useless for me. I don't want to show the model metrics on the site. They're already showed WandB
+About the model architecture, I would like you to research and find if there is a possibility to add a new feature for the model, a weather in Oblast at a particular time and uh, date. I believe this feature would be very useful for predicting whether there will be an air alert or not. And also I have a couple of questions I want you to tell me more about the model that we use for predicting how much time left till the end of the current alert. I want you to tell me about the pros and cons of using LSTM for predicting the probability of alert starting right now. And I want you to propose alternatives to it because I feel like using LSTM for a time series task is not optimal and there should be other better approaches. Keep in mind that we have very little compute and I would like to keep that training as fast as possible.
+[tool call: Bash]
+    ls app app/static training && grep -n -i "model" app/static/*.html | head -40 && grep -n -i "tab\|model" app/static/*.js | head -80
+[tool output]
+    app:
+    __init__.py
+    __main__.py
+    prepare_geojson.py
+    __pycache__
+    regions.py
+    server.py
+    static
+    
+    app/static:
+    app.js
+    index.html
+    oblasts.geojson
+    style.css
+    
+    training:
+    build_neighbors.py
+    data.py
+    duration_model.py
+    features.py
+    __init__.py
+    neighbors.json
+    __pycache__
+    start_model.py
+    train.py
+    45:      <div class="legend-item"><span class="swatch perm-swatch"></span>Permanent alert / no model</div>
+    60:          <button class="seg" data-view="model">Model</button>
+    90:  if (d.properties.permanent) return showTip(ev, `<b>${r}</b><br><span class="mono">Permanent alert since 2022 - not modelled</span>`);
+    159:    <div class="chart-legend"><span><i style="background:var(--series-model)"></i>P(start ≤ 1 h)</span><span><i style="background:var(--text-primary);width:2px;height:8px"></i>alert started</span></div>
+    185:    .attr("stroke", css("--series-model")).attr("stroke-width", 2).attr("d", d3.line((p) => x(p[0]), (p) => y(p[1])));
+    192:  vline(d.median_min, css("--series-model"), "4 3", `median ${mins(d.median_min)}`, 0);
+    228:  f.g.append("path").datum(ts.map((d, i) => [d, series.p[i]])).attr("fill", "none").attr("stroke", css("--series-model"))
+    247:/* ---------- bottom row: Today / Last 7 days / Model ---------- */
+    256:  document.querySelectorAll("#bottom-tabs .seg").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
+    263:  if (state.view === "model") return renderModelView();
+    271:  if (seq !== bottomSeq) return; // a newer request (time step / tab switch) superseded this one
+    299:function renderModelView() {
+    333:    .attr("rx", 2).attr("fill", css("--series-model"))
+    346:    .attr("y", (d) => y(d.n)).attr("height", (d) => f.ih - y(d.n)).attr("rx", 2).attr("fill", css("--series-model"))
+    378:  const series = [["train_binary_logloss", "train", css("--series-model")], ["valid_binary_logloss", "validation", css("--series-baseline")]];
+    397:  f.g.append("path").datum(data).attr("fill", "none").attr("stroke", css("--series-model")).attr("stroke-width", 2)
+    400:    .attr("fill", css("--series-model")).attr("stroke", css("--panel")).attr("stroke-width", 2)
+    420:  if (state.view !== "model") renderBottom(); // situation stats follow the selected time
+    465:  document.querySelectorAll("#bottom-tabs .seg").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+    467:  window.addEventListener("resize", () => { drawMap(); if (state.snap) render(); if (state.view === "model") renderBottom(); });
+[tool call: Bash]
+    sed -n 50,70p app/static/index.html && sed -n 240,420p app/static/app.js && grep -n "metrics\|/api/" app/server.py | head -40 && grep -n "model-\|\.model\|curve" app/static/style.css | head
+[tool output]
+        <div class="panel-head" id="detail-title">Select a region</div>
+        <div id="detail" class="detail"></div>
+      </section>
+    
+      <section class="bottom">
+        <div class="panel">
+          <div class="panel-head">
+            <div class="mode tabs" id="bottom-tabs">
+              <button class="seg active" data-view="today">Today</button>
+              <button class="seg" data-view="week">Last 7 days</button>
+              <button class="seg" data-view="model">Model</button>
+            </div>
+            <span id="glance-note" class="muted small"></span>
+          </div>
+          <div id="kpis" class="kpis"></div>
+        </div>
+        <div class="panel chart-card"><div class="panel-head" id="c1-head"></div><div id="c1" class="chart"></div></div>
+        <div class="panel chart-card wide"><div class="panel-head" id="c2-head"></div><div id="c2" class="chart"></div></div>
+        <div class="panel chart-card"><div class="panel-head" id="c3-head"></div><div id="c3" class="chart"></div></div>
+      </section>
+    </main>
+          line.style("display", null).attr("x1", x(ts[i])).attr("x2", x(ts[i]));
+          showTip(ev, html(i));
+        })
+        .on("mouseleave", () => { line.style("display", "none"); hideTip(); })
+        .on("click", (ev) => onClick && onClick(bis(ts, x.invert(d3.pointer(ev)[0]))));
+    }
+    
+    /* ---------- bottom row: Today / Last 7 days / Model ---------- */
+    const tile = (k, v, d = "", cls = "") => `<div class="kpi"><span class="k">${k}</span><span class="v">${v}</span><span class="d ${cls}">${d}</span></div>`;
+    const cards = () => [1, 2, 3].map((i) => ({ head: $(`c${i}-head`), el: $(`c${i}`) }));
+    const FEATURE_NAMES = { region: "Oblast", hour_kyiv: "Hour of day", dow_kyiv: "Day of week", min_since_last_end: "Time since last alert",
+      starts_24h: "Alerts last 24 h", starts_7d: "Alerts last 7 d", n_active_oblasts: "Oblasts on alert now", national_starts_1h: "National starts 1 h",
+      nb_active_frac: "Neighbours on alert", nb_starts_1h: "Neighbour starts 1 h" };
+    
+    function setView(v) {
+      state.view = v;
+      document.querySelectorAll("#bottom-tabs .seg").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
+      renderBottom();
+    }
+    
+    let bottomSeq = 0;
+    async function renderBottom() {
+      const seq = ++bottomSeq;
+      if (state.view === "model") return renderModelView();
+      if (!state.snap) return;
+      const live = state.mode === "now";
+      const period = state.view === "today" ? "today" : "week";
+      let g;
+      try {
+        g = await getJSON(`/api/glance?t=${encodeURIComponent(state.snap.t)}&period=${period}&live=${live}`);
+      } catch (e) { $("glance-note").innerHTML = `<span class="warn">${e.message}</span>`; return; }
+      if (seq !== bottomSeq) return; // a newer request (time step / tab switch) superseded this one
+      renderGlance(g);
+    }
+    
+    function renderGlance(g) {
+      const [c1, c2, c3] = cards();
+      const span = g.period === "today" ? `since 00:00 Kyiv` : `${fmtShort.format(new Date(g.start))} – ${fmtShort.format(new Date(g.end))}`;
+      $("glance-note").innerHTML = span + (g.data_until ? ` · <span class="warn">history only until ${fmtKyiv.format(new Date(g.data_until))}</span>` : "");
+      const L = g.longest, P = g.peak;
+      $("kpis").innerHTML =
+        tile("Alerts started", g.alerts_started, g.period === "today" ? "today" : "last 7 days") +
+        tile("Alert-hours", `${g.alert_hours}h`, "summed over oblasts") +
+        tile("Oblasts affected", `${g.oblasts_affected}/${g.oblasts_total}`, "had at least one alert") +
+        tile("Median duration", g.median_duration_min == null ? "—" : mins(g.median_duration_min), "finished alerts") +
+        tile("Longest alert", L ? mins(L.minutes) : "—", L ? `${label(L.region)}${L.ongoing ? " · ongoing" : ""}` : "") +
+        tile("Peak at once", P ? `${P.oblasts} obl.` : "—", P ? fmtKyiv.format(new Date(P.t)) : "");
+    
+      c1.head.innerHTML = `Most affected oblasts <span class="muted">alert-hours</span>`;
+      drawBars(c1.el, g.by_region.slice(0, 8).map((d) => ({ k: d.label, v: d.hours, tip: `<b>${d.label}</b><br>${d.hours.toFixed(1)} alert-hours · ${d.alerts} alerts started` })),
+        (v) => `${v.toFixed(1)}h`, 105);
+    
+      c2.head.innerHTML = `Oblasts under alert <span class="muted">${g.period === "today" ? "every 10 min" : "hourly"}</span>`;
+      drawTimeline(c2.el, g.timeline);
+    
+      c3.head.innerHTML = `How long alerts lasted <span class="muted">finished alerts</span>`;
+      drawColumns(c3.el, g.durations);
+    }
+    
+    function renderModelView() {
+      const m = state.meta.metrics;
+      const [c1, c2, c3] = cards();
+      $("glance-note").textContent = `test period ${fmtShort.format(new Date(m.test_start))} – ${fmtShort.format(new Date(m.test_end))}`;
+      const rel = (a, b, lowerBetter) => {
+        const diff = ((a - b) / b) * 100, better = lowerBetter ? diff < 0 : diff > 0;
+        return [`${diff > 0 ? "+" : ""}${diff.toFixed(1)}% vs baseline ${b.toFixed(3)}`, better ? "better" : "worse"];
+      };
+      const [bd, bc] = rel(m.start_brier, m.start_baseline_brier, true);
+      const [ad, ac] = rel(m.start_roc_auc, m.start_baseline_roc_auc, false);
+      const [pd_, pc] = rel(m.start_pr_auc, m.start_baseline_pr_auc, false);
+      const [md, mc] = rel(m.dur_mae_median_min, m.dur_mae_baseline_min, true);
+      $("kpis").innerHTML =
+        tile("Start · Brier", m.start_brier.toFixed(3), bd, bc) +
+        tile("Start · ROC-AUC", m.start_roc_auc.toFixed(3), ad, ac) +
+        tile("Start · PR-AUC", m.start_pr_auc.toFixed(3), pd_, pc) +
+        tile("Duration · MAE", `${m.dur_mae_median_min.toFixed(1)}m`, md.replace(/baseline ([\d.]+)/, "baseline $1m"), mc) +
+        tile("Duration · 80% cover", pct(m.dur_coverage_80), "target 80%", Math.abs(m.dur_coverage_80 - 0.8) < 0.05 ? "better" : "worse") +
+        tile("Duration · C-index", m.dur_c_index.toFixed(3), `${m.dur_test_events} test alerts`);
+      c1.head.innerHTML = `Calibration <span class="muted">test period</span>`;
+      drawCalibration(c1.el);
+      c2.head.innerHTML = `Training curve <span class="muted">log loss per boosting round</span>`;
+      drawCurves(c2.el);
+      c3.head.innerHTML = `What drives the forecast <span class="muted">LightGBM gain</span>`;
+      const imp = Object.entries(state.meta.importance).map(([k, v]) => ({ k: FEATURE_NAMES[k] ?? k, v }));
+      const total = d3.sum(imp, (d) => d.v);
+      drawBars(c3.el, imp.sort((a, b) => b.v - a.v).map((d) => ({ ...d, tip: `<b>${d.k}</b><br>${pct(d.v / total)} of total gain` })), (v) => pct(v / total), 140);
+    }
+    
+    function drawBars(el, data, fmt, labelWidth) {
+      const f = frame(el, { t: 6, r: 50, b: 6, l: labelWidth });
+      const y = d3.scaleBand(data.map((d) => d.k), [0, f.ih]).padding(0.3), x = d3.scaleLinear([0, d3.max(data, (d) => d.v) || 1], [0, f.iw]);
+      f.g.append("g").attr("class", "axis").call(d3.axisLeft(y).tickSize(0).tickPadding(8)).select(".domain").remove();
+      f.g.selectAll("rect").data(data).join("rect").attr("y", (d) => y(d.k)).attr("height", y.bandwidth()).attr("width", (d) => Math.max(1, x(d.v)))
+        .attr("rx", 2).attr("fill", css("--series-model"))
+        .on("mousemove", (ev, d) => showTip(ev, d.tip)).on("mouseleave", hideTip);
+      f.g.selectAll("text.v").data(data).join("text").attr("class", "series-label").attr("x", (d) => x(d.v) + 4)
+        .attr("y", (d) => y(d.k) + y.bandwidth() / 2 + 3).text((d) => fmt(d.v));
+    }
+    
+    function drawColumns(el, data) {
+      const f = frame(el, { t: 14, r: 10, b: 20, l: 30 });
+      const x = d3.scaleBand(data.map((d) => d.bin), [0, f.iw]).padding(0.25), y = d3.scaleLinear([0, d3.max(data, (d) => d.n) || 1], [f.ih, 0]).nice();
+      const total = d3.sum(data, (d) => d.n) || 1;
+      f.g.append("g").attr("class", "axis").attr("transform", `translate(0,${f.ih})`).call(d3.axisBottom(x).tickSize(0).tickPadding(6));
+      f.g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(3));
+      f.g.selectAll("rect").data(data).join("rect").attr("x", (d) => x(d.bin)).attr("width", x.bandwidth())
+        .attr("y", (d) => y(d.n)).attr("height", (d) => f.ih - y(d.n)).attr("rx", 2).attr("fill", css("--series-model"))
+        .on("mousemove", (ev, d) => showTip(ev, `<b>${d.bin}</b><br>${d.n} alerts · ${pct(d.n / total)}`)).on("mouseleave", hideTip);
+      f.g.selectAll("text.v").data(data).join("text").attr("class", "series-label").attr("text-anchor", "middle")
+        .attr("x", (d) => x(d.bin) + x.bandwidth() / 2).attr("y", (d) => y(d.n) - 3).text((d) => pct(d.n / total));
+    }
+    
+    function drawTimeline(el, tl) {
+      const f = frame(el, { t: 10, r: 14, b: 22, l: 30 });
+      const ts = tl.t.map((v) => new Date(v));
+      if (ts.length < 2) return;
+      const x = d3.scaleTime(d3.extent(ts), [0, f.iw]), y = d3.scaleLinear([0, Math.max(4, d3.max(tl.active))], [f.ih, 0]).nice();
+      const short = ts.at(-1) - ts[0] <= 864e5;
+      f.g.append("g").attr("class", "axis").attr("transform", `translate(0,${f.ih})`)
+        .call(d3.axisBottom(x).ticks(Math.max(2, Math.floor(f.iw / 80))).tickFormat((v) => (short ? fmtHM : fmtShort).format(v)));
+      f.g.append("g").attr("class", "axis").call(d3.axisLeft(y).ticks(4));
+      const pts = ts.map((d, i) => [d, tl.active[i]]);
+      f.g.append("path").datum(pts).attr("fill", css("--critical")).attr("fill-opacity", 0.2).attr("d", d3.area((p) => x(p[0]), f.ih, (p) => y(p[1])).curve(d3.curveStepAfter));
+      f.g.append("path").datum(pts).attr("fill", "none").attr("stroke", css("--critical")).attr("stroke-width", 1.5)
+        .attr("d", d3.line((p) => x(p[0]), (p) => y(p[1])).curve(d3.curveStepAfter));
+      hoverTime(f, x, ts, (i) => `${fmtKyiv.format(ts[i])}<br><b>${tl.active[i]}</b> oblasts under alert`);
+    }
+    
+    function drawCurves(el) {
+    [... 61 more lines truncated]
+[tool call: Bash]
+    grep -n "FEATURE_NAMES\|meta\.metrics\|meta\.importance\|meta\.calibration\|meta\.curves\|drawCalibration\|drawCurves\|series-baseline" app/static/app.js app/static/style.css; sed -n 60,80p app/server.py; grep -rn "series-baseline\|calibration\|curves\|importance" app/static/style.css tests/ | head; cat training/duration_model.py | head -80; grep -n "FEATURES\|def \|num_threads\|params" training/start_model.py | head -40
+[tool output]
+    app/static/style.css:15:  --series-baseline: #d95926;
+    app/static/app.js:250:const FEATURE_NAMES = { region: "Oblast", hour_kyiv: "Hour of day", dow_kyiv: "Day of week", min_since_last_end: "Time since last alert",
+    app/static/app.js:300:  const m = state.meta.metrics;
+    app/static/app.js:319:  drawCalibration(c1.el);
+    app/static/app.js:321:  drawCurves(c2.el);
+    app/static/app.js:323:  const imp = Object.entries(state.meta.importance).map(([k, v]) => ({ k: FEATURE_NAMES[k] ?? k, v }));
+    app/static/app.js:368:function drawCurves(el) {
+    app/static/app.js:369:  const rows = state.meta.curves;
+    app/static/app.js:372:  const best = state.meta.metrics.start_best_rounds;
+    app/static/app.js:378:  const series = [["train_binary_logloss", "train", css("--series-model")], ["valid_binary_logloss", "validation", css("--series-baseline")]];
+    app/static/app.js:389:function drawCalibration(el) {
+    app/static/app.js:396:  const data = state.meta.calibration.filter((d) => d.n >= 30); // tiny bins (e.g. n=1) are noise
+    
+    @app.get("/")
+    def index():
+        return FileResponse(STATIC / "index.html")
+    
+    
+    @app.get("/api/meta")
+    def meta():
+        a = artifacts()
+        r, m = a["replay"], a["metrics"]
+        national = r.groupby("t").agg(starts=("y", "sum"), active=("active_now", "sum"), p_sum=("p_start", "sum"))  # NaN skipped
+        return {
+            "regions": [{"region": x, "label": LABELS[x]} for x in a["regions"]],
+            "times": [t.isoformat() for t in a["times"]],
+            "metrics": m["metrics"], "calibration": m["calibration"], "importance": m["importance"],
+            "curves": m.get("curves", []),
+            "national": {"t": [t.isoformat() for t in national.index], **{c: national[c].round(2).tolist() for c in national}},
+            "curve_grid": CURVE_GRID.tolist(),
+        }
+    
+    
+    app/static/style.css:15:  --series-baseline: #d95926;
+    """Model 2: distribution of alert duration (log-normal accelerated failure time model).
+    
+    log(duration) ~ Normal(mu(x), sigma), so S(t) = 1 - Phi((ln t - mu) / sigma).
+    The fitted coefficients are exported to JSON; prediction below needs only numpy/scipy.
+    """
+    import json
+    from pathlib import Path
+    
+    import numpy as np
+    import pandas as pd
+    from lifelines import LogLogisticAFTFitter, LogNormalAFTFitter, WeibullAFTFitter
+    from lifelines.utils import concordance_index
+    from scipy.stats import norm
+    
+    NUMERIC = ["hour_sin", "hour_cos", "n_active_oblasts", "log_prev_duration"]
+    
+    
+    def design_matrix(feats: pd.DataFrame, regions: list[str]) -> pd.DataFrame:
+        X = pd.DataFrame(index=feats.index)
+        for r in regions[1:]:  # first region is the reference level
+            X[f"region={r}"] = (feats.region == r).astype(float)
+        X["hour_sin"], X["hour_cos"] = feats.hour_sin, feats.hour_cos
+        X["n_active_oblasts"] = feats.n_active_oblasts.astype(float)
+        X["log_prev_duration"] = np.log1p(feats.prev_duration_min)
+        return X
+    
+    
+    def fit(feats: pd.DataFrame, durations: pd.Series, regions: list[str]) -> tuple[dict, LogNormalAFTFitter]:
+        X = design_matrix(feats, regions)
+        df = X.assign(duration=durations.clip(lower=0.5).to_numpy())
+        aft = LogNormalAFTFitter(penalizer=0.01).fit(df, duration_col="duration")
+        mu = aft.params_.loc["mu_"]
+        params = {
+            "regions": regions,
+            "mu_intercept": float(mu["Intercept"]),
+            "mu_coef": {c: float(mu[c]) for c in X.columns},
+            "log_sigma": float(aft.params_.loc[("sigma_", "Intercept")]),
+        }
+        return params, aft
+    
+    
+    FAMILIES = {"lognormal": LogNormalAFTFitter, "weibull": WeibullAFTFitter, "loglogistic": LogLogisticAFTFitter}
+    
+    
+    def compare_families(f_tr: pd.DataFrame, d_tr: pd.Series, f_va: pd.DataFrame, d_va: pd.Series,
+                         regions: list[str]) -> dict[str, float]:
+        """Mean validation log-likelihood (per alert, minutes scale) of each AFT distribution family."""
+        # every alert here has an observed end (event = 1); score() needs the column explicitly
+        tr = design_matrix(f_tr, regions).assign(duration=d_tr.clip(lower=0.5).to_numpy(), event=1)
+        va = design_matrix(f_va, regions).assign(duration=d_va.clip(lower=0.5).to_numpy(), event=1)
+        out = {}
+        for name, cls in FAMILIES.items():
+            m = cls(penalizer=0.01).fit(tr, duration_col="duration", event_col="event")
+            out[name] = float(m.score(va, scoring_method="log_likelihood"))
+        return out
+    
+    
+    def predict_mu_sigma(params: dict, feats: pd.DataFrame) -> tuple[np.ndarray, float]:
+        X = design_matrix(feats, params["regions"])
+        coef = pd.Series(params["mu_coef"])
+        mu = params["mu_intercept"] + X[coef.index].to_numpy() @ coef.to_numpy()
+        return mu, float(np.exp(params["log_sigma"]))
+    
+    
+    def quantile(mu, sigma, q, elapsed=0.0):
+        """Duration quantile, optionally conditional on the alert having lasted ``elapsed`` minutes."""
+        elapsed = np.asarray(elapsed, dtype=float)
+        s_e = np.where(elapsed > 0, norm.sf((np.log(np.maximum(elapsed, 1e-9)) - mu) / sigma), 1.0)
+        return np.exp(mu + sigma * norm.ppf(1 - (1 - q) * s_e))
+    
+    
+    def survival_curve(mu: float, sigma: float, grid_min: np.ndarray, elapsed: float = 0.0) -> np.ndarray:
+        s = norm.sf((np.log(grid_min) - mu) / sigma)
+        if elapsed > 0:
+            s = np.minimum(s / norm.sf((np.log(elapsed) - mu) / sigma), 1.0)
+            s[grid_min < elapsed] = 1.0
+        return s
+    
+    
+    def evaluate(params: dict, feats: pd.DataFrame, durations: pd.Series, baseline_median: pd.Series) -> dict:
+    9:from training.features import START_FEATURES
+    19:    "num_threads": 4,  # physical cores; 8 hyper-threads oversubscribe a busy 4-core laptop badly
+    25:def _dataset(X: pd.DataFrame, y: np.ndarray, features: list[str], reference=None) -> lgb.Dataset:
+    30:def fit_with_validation(X_tr, y_tr, X_va, y_va, features=START_FEATURES) -> tuple[lgb.Booster, dict]:
+    44:def fit(X: pd.DataFrame, y: np.ndarray, rounds: int, features=START_FEATURES) -> lgb.Booster:
+    49:def predict(model: lgb.Booster, X: pd.DataFrame) -> np.ndarray:
+    54:def baseline_table(X: pd.DataFrame, y: np.ndarray) -> pd.Series:
+    59:def baseline_predict(table: pd.Series, X: pd.DataFrame) -> np.ndarray:
+    66:def metrics(y: np.ndarray, p: np.ndarray, prefix: str) -> dict:
+    76:def calibration(y: np.ndarray, p: np.ndarray, bins: int = 10) -> pd.DataFrame:
+    82:def save(model: lgb.Booster, path: Path) -> None:
+    86:def load(path: Path) -> lgb.Booster:
+[tool call: Bash]
+    grep -n "START_FEATURES\|DURATION\|^def " training/features.py | head -30 && python3 -c "
+    import json;m=json.load(open('models/metrics.json'));print(json.dumps(m['metrics'],indent=0)[:1500]);print(m['importance'])" && grep -n "TRAIN_FROM\|2025\|timedelta\|days" training/train.py | head
+[tool output]
+    19:START_FEATURES = [
+    24:DURATION_FEATURES = ["region", "hour_sin", "hour_cos", "n_active_oblasts", "prev_duration_min"]
+    27:def _ns(ts) -> np.ndarray:
+    31:def _intervals(alerts: pd.DataFrame, region: str) -> tuple[np.ndarray, np.ndarray]:
+    38:def _active_at(starts, ends, t) -> np.ndarray:
+    45:def _count_between(starts, lo, hi) -> np.ndarray:
+    49:def hourly_grid(start: pd.Timestamp, end: pd.Timestamp) -> pd.DatetimeIndex:
+    53:def start_features(alerts: pd.DataFrame, times: pd.DatetimeIndex, regions: list[str]) -> pd.DataFrame:
+    96:def start_labels(alerts: pd.DataFrame, feats: pd.DataFrame) -> np.ndarray:
+    106:def duration_features(alerts: pd.DataFrame, events: pd.DataFrame, regions: list[str]) -> pd.DataFrame:
+    {
+    "start_brier": 0.15205192918711868,
+    "start_logloss": 0.46329023817413584,
+    "start_roc_auc": 0.7694500181738557,
+    "start_pr_auc": 0.5203552375920583,
+    "start_baseline_brier": 0.16835923305093745,
+    "start_baseline_logloss": 0.5252804671440282,
+    "start_baseline_roc_auc": 0.7304468518711248,
+    "start_baseline_pr_auc": 0.4792458418720017,
+    "start_valid_brier": 0.14287438115196538,
+    "start_valid_logloss": 0.43851589155657716,
+    "start_valid_roc_auc": 0.7765749015579524,
+    "start_valid_pr_auc": 0.5127589554270361,
+    "start_best_rounds": 124,
+    "start_train_rows": 179654,
+    "start_test_rows": 14155,
+    "start_test_pos_rate": 0.24507241257506182,
+    "start_fit_seconds": 3.3202080726623535,
+    "dur_mae_median_min": 19.25153074075867,
+    "dur_mae_baseline_min": 19.541426262123853,
+    "dur_medae_min": 10.558442849808284,
+    "dur_coverage_80": 0.8102462074110918,
+    "dur_c_index": 0.6104020872654107,
+    "dur_mean_log_lik": -4.239699268956702,
+    "sigma": 1.0820559304323858,
+    "dur_valid_loglik_lognormal": -4.363796562401097,
+    "dur_valid_loglik_weibull": -4.313953625602352,
+    "dur_valid_loglik_loglogistic": -4.350128360503864,
+    "dur_train_events": 33246,
+    "dur_test_events": 4021,
+    "dur_fit_seconds": 6.565280437469482,
+    "valid_start": "2026-08-31 03:00:00+00:00",
+    "test_start": "2026-09-14 03:00:00+00:00",
+    "test_end": "2026-10-12 03:00:00+00:00",
+    "data_until": "2026-10-12 04:59:03+00:00"
+    }
+    {'region': 77111.6, 'hour_kyiv': 15025.1, 'dow_kyiv': 2867.9, 'min_since_last_end': 13220.0, 'starts_24h': 15719.9, 'starts_7d': 218376.7, 'n_active_oblasts': 5544.2, 'national_starts_1h': 5706.0, 'nb_active_frac': 9739.3, 'nb_starts_1h': 5843.7}
+    29:    test_start = grid_end - pd.Timedelta(days=TEST_DAYS)
+    30:    return test_start - pd.Timedelta(days=VALID_DAYS), test_start, grid_end
+    66:        "test_end": str(grid_end), "valid_days": VALID_DAYS, "test_days": TEST_DAYS, "n_regions": len(regs),
+    130:    lookback = test_start - pd.Timedelta(days=7)  # history panel needs a week before the test window
+[tool call: ToolSearch]
+    {
+     "query": "select:WebFetch,WebSearch",
+     "max_results": 2
+    }
+[tool output]
+
+
+==== CLAUDE (2026-10-12 16:08:14 UTC) ====
+I've checked the UI code and both models. Now I'm confirming which free weather API works for the oblast weather feature.
+[tool call: WebFetch]
+    {
+     "url": "https://open-meteo.com/en/docs/historical-forecast-api",
+     "prompt": "What is the endpoint URL, does it need an API key, what date range is available (start year), hourly variables available (cloud cover, wind, precipitation, visibility), can multiple coordinates be requested in one call, and what are the rate limits for free non-commercial use?"
+    }
+[tool call: WebSearch]
+    {
+     "query": "Shahed drone attacks weather dependence wind cloud cover Ukraine air raid alerts",
+     "mode": "standard"
+    }
+[tool output]
+    - **Endpoint URL:** `https://historical-forecast-api.open-meteo.com/v1/forecast`. The page's download links use this host and path.
+    - **API key:** The page doesn't mention one.
+    - **Start date:** The page says "Past weather forecasts from 2022 onwards are available." Some individual models have earlier archives, such as JMA from 2016.
+    - **Hourly variables:**
+      - *Cloud cover:* Total, Low, Mid, and High.
+      - *Wind:* Speed and direction at several heights (10 m to 200 m), plus Wind Gusts (10 m).
+      - *Precipitation:* Precipitation (rain + showers + snow), Rain, Showers, Snowfall, Precipitation Probability, and Snow Depth.
+      - *Visibility:* Yes, listed as "Visibility."
+    - **Multiple coordinates:** The location selector offers a "Coordinates List" option and a bounding box, which suggests multiple locations are supported. The page doesn't explicitly document how a single API call handles them, so check the Weather Forecast API docs.
+    - **Rate limits for free non-commercial use:** The page doesn't state any rate limits.
+[tool output]
+    Web search results for query: "Shahed drone attacks weather dependence wind cloud cover Ukraine air raid alerts"
+    
+    Links: [{"title":"Occupiers use poor weather for air attacks on Ukraine","url":"https://mind.ua/en/news/amp/20259931-occupiers-use-poor-weather-for-air-attacks-on-ukraine"},{"title":"Occupiers use poor weather for air attacks on Ukraine","url":"https://mind.ua/en/news/20259931-occupiers-use-poor-weather-for-air-attacks-on-ukraine"},{"title":"The Air Force told how the Russians use cloudiness and rain for attacks on Ukraine","url":"https://babel.ua/en/news/96250-the-air-force-told-how-the-russians-use-cloudiness-and-rain-for-attacks-on-ukraine"},{"title":"KI short logo","url":"https://kyivindependent.com/ukraines-autumn-rains-help-shahed-type-drones-evade-ukrainian-air-defense/"},{"title":"Russia uses deterioration of weather for air attacks on Ukraine - Ihnat","url":"https://ukranews.com/en/amp/news/944582-russia-uses-deterioration-of-weather-for-air-attacks-on-ukraine-ihnat"},{"title":"Ihnat tells whether russia will be able to launch Shaheds over Ukraine during bad weather","url":"https://ukranews.com/en/amp/news/969184-ihnat-tells-whether-russia-will-be-able-to-launch-shaheds-over-ukraine-during-bad-weather"},{"title":"969184 ihnat tells whether russia will be able to launch shaheds over ukraine during bad weather","url":"https://ukranews.com/en/news/969184-ihnat-tells-whether-russia-will-be-able-to-launch-shaheds-over-ukraine-during-bad-weather"},{"title":"944582 russia uses deterioration of weather for air attacks on ukraine ihnat","url":"https://ukranews.com/en/news/944582-russia-uses-deterioration-of-weather-for-air-attacks-on-ukraine-ihnat?print=1"},{"title":"Ukrainian Air Force spells out if weather affects Iranian-made drones","url":"https://www.pravda.com.ua/eng/news/2022/12/11/7380297"},{"title":"944582 russia uses deterioration of weather for air attacks on ukraine ihnat","url":"https://ukranews.com/en/news/944582-russia-uses-deterioration-of-weather-for-air-attacks-on-ukraine-ihnat"}]
+    
+    Official Ukrainian statements and press coverage describe Shahed drones as only mildly affected by cloud and rain, but vulnerable to strong wind and icing.
+    
+    - **Cloud and rain:** Air Force spokesman Yurii Ihnat has said overcast weather hampers Ukraine's mobile fire groups, which must visually acquire targets, while Shaheds are less affected because they follow preset routes. Severe cloud cover complicates the work of mobile fire groups, which must first of all see the object, the aerial target, because it is necessary to aim at it. As for cruise missiles and Shaheds, the weather does not affect them too much here, because they fly along their given route.
+    - **Wind and icing:** Ihnat has also said strong wind can blow drones off course, and sudden temperature changes can cause icing. If the wind is strong, it can have an effect, because it can simply blow away those drones. In 2022, the Air Force spokesperson likewise named heavy wind and icing as the conditions that could stop Shaheds from flying. Icing of the device happens due to high air humidity in a short time when there is a rapid shift from "plus" to "minus" temperature.
+    - **Operational impact:** A Kyiv Independent report from October 2025 says Zelensky claimed overcast weather cut air-defense effectiveness by "20-30%", and that some Shahed-type drones include their own visual guidance systems, but they largely follow set coordinates.
+    - **Counter-measures:** Experts quoted there argue for low-altitude radar, which is costly, and say more surface-to-air missiles are the main answer. For now, Ukraine's current defenses will have to endure until the weather clears up.
+    - **Adaptation:** A southern Ukrainian defence spokesperson said Russia appeared to adapt its launches to weather, since the drones are sensitive to cold. Some of these statements date from 2022 and mid-2020s, so the more recent figures are the most relevant.
+    
+    
+    REMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.
+[tool call: Write]
+    /home/vumenira/.claude/plans/hello-i-m-working-on-wondrous-sparrow.md
+    # Plan: remove the Model tab, test a weather feature, answers about the models
+    
+    ## Context
+    You asked for three things:
+    1. Remove the "Model" tab from the dashboard's bottom panel. Its metrics are already in W&B.
+    2. Find out whether oblast weather at a given time could be a feature for the start model.
+    3. Answers to three questions: how the duration model works, pros and cons of an LSTM for "will an alert start now", and better alternatives that train cheaply.
+    
+    **One correction first:** the start model is **not an LSTM**. It is **LightGBM** (gradient-boosted trees) on hand-built hourly features (`training/start_model.py`), and it fits in about 3 s. The LSTM question is answered below as "what if we switched to one".
+    
+    ---
+    
+    ## Part 1: Remove the Model tab (UI)
+    
+    **`app/static/index.html`**
+    - Delete the `<button class="seg" data-view="model">Model</button>` line (around line 60).
+    
+    **`app/static/app.js`**
+    - Delete `renderModelView()`, `drawCurves()` and `drawCalibration()`, plus the `FEATURE_NAMES` constant (only the Model view uses it).
+    - In `renderBottom()`, delete the `if (state.view === "model") return renderModelView();` line.
+    - Simplify the `state.view !== "model"` checks:
+      - In `render()`: always call `renderBottom()`.
+      - In the resize handler: drop the model-only re-render. Glance charts already redraw through `render()`.
+    - Change the section comment to `Today / Last 7 days`.
+    
+    **`app/server.py`, `/api/meta`**
+    - Stop sending `metrics`, `calibration`, `importance` and `curves`. Nothing else in the frontend reads them (checked with grep).
+    - `train.py` still writes `models/metrics.json`, so W&B logging and the README table don't change.
+    
+    **`app/static/style.css`**
+    - Remove `--series-baseline`. Only the training-curve chart used it.
+    
+    **`CLAUDE.md`**
+    - In the Dashboard command line, remove "and a Model tab".
+    
+    ---
+    
+    ## Part 2: Weather feature (research findings, then an experiment)
+    
+    ### Findings
+    - **Source:** Open-Meteo **Historical Forecast API** (`https://historical-forecast-api.open-meteo.com/v1/forecast`).
+      - Free, no key.
+      - Hourly data from 2022 on. The training window starts 2025-10-01, so it's covered.
+      - Variables include cloud cover (low/mid/high), wind speed and gusts, precipitation, visibility and temperature.
+    - **Leakage:**
+      - Use the *historical forecast* archive, not ERA5 reanalysis. Reanalysis is "true" weather assimilated after the fact, which is not knowable at time `t`. The forecast archive holds what a forecast said ahead of time, so it obeys the CLAUDE.md no-leakage rule.
+      - For live "Now" mode, call the normal forecast API with the same variables.
+    - **Domain evidence is mixed:**
+      - Air Force spokesman Ihnat says Shaheds and cruise missiles follow preset routes, so cloud and rain barely affect them.
+      - Strong wind and icing *can* ground drones.
+      - Russia appears to time attacks for overcast weather, because cloud hurts Ukrainian mobile fire groups.
+    - **Caveat that limits the expected gain:** the threat starts far from the oblast (launch sites in Russia and the Black Sea). Local oblast weather is a weak proxy. The model's strongest feature is `starts_7d`, which already captures the attack regime. A realistic outcome is a small gain, or none.
+    
+    ### Experiment (stays on validation, no peeking at the test set)
+    1. **New module `training/weather.py`:**
+       - `fetch_weather(regions, start, end)` makes one batched request with comma-separated lat/lon lists, using one point per oblast at the admin-centre coordinates. It caches the result to `data/weather.parquet`, which is gitignored like the rest of `data/`.
+       - Hourly variables: `cloud_cover`, `cloud_cover_low`, `wind_speed_10m`, `wind_gusts_10m`, `precipitation`, `temperature_2m`, `visibility`.
+       - Also add a "national" aggregate: the mean over oblasts of wind and cloud. It's a cheap proxy for conditions along the route.
+    2. **Feature join:** in `training/features.py`, add a `weather_features(feats, weather)` function that joins on `(region, t)`, using the forecast valid for hour `t`. Keep it out of `START_FEATURES` by default.
+    3. **Ablation:** extend `exploration/02_feature_ablation.py` with baseline features vs. baseline + weather, scored on validation Brier, log loss and PR-AUC. Log to W&B with `--wandb`.
+    4. **Decision rule:**
+       - If validation log loss improves meaningfully (more than about 0.5%), add the weather features to `START_FEATURES`, retrain, wire live fetching into `app/server.py`, and update the README.
+       - Otherwise, write up the negative result in the README and the AI log. A verified "no gain" is still a good process signal.
+    5. **Leakage test:** add a test to `tests/test_no_leakage.py` asserting that the weather at row `t` comes from a forecast valid at `t`, never a later hour.
+    
+    ---
+    
+    ## Part 3: Answers to your questions (no code)
+    
+    ### Duration model (`training/duration_model.py`)
+    - **What it is:** a log-normal accelerated failure time (AFT) model, fitted with lifelines.
+      - It assumes `log(duration) ~ Normal(mu(x), sigma)`.
+      - `mu(x)` is linear in these inputs: oblast (one-hot), hour (sin/cos), number of oblasts currently on alert, and log of the previous alert's duration.
+      - Only the coefficients are exported to JSON. Prediction is closed-form numpy/scipy.
+    - **"Time left" output:** the model returns quantiles conditioned on elapsed time: `S(t | lasted e) = S(t) / S(e)`. So the median end moves later as an alert drags on.
+    - **Test results:**
+    
+      | Metric | Model | Baseline |
+      |---|---|---|
+      | MAE of median | 19.3 min | 19.5 min (per-oblast median) |
+      | 80% interval coverage | 81% (well calibrated) | – |
+      | C-index | 0.61 (weak ranking) | – |
+    
+      - sigma = 1.08, which is very wide: the 80% interval spans roughly ÷4 to ×4 around the median.
+    - **Pros:**
+      - Tiny and fast (about 6 s).
+      - Gives a full calibrated distribution.
+      - Handles elapsed time exactly.
+      - Interpretable.
+    - **Cons:**
+      - Barely beats the baseline point estimate.
+      - Linear in its features.
+      - Weibull fit better on validation (−4.31 vs −4.36 log-lik) but isn't used.
+      - Durations depend on the threat type (a drone wave vs. a ballistic missile), which the inputs don't include.
+      - Cheap upgrades: switch to Weibull, or use LightGBM with a survival objective.
+    
+    ### LSTM for "P(alert starts in the next hour)"
+    - **Pros:**
+      - Learns temporal patterns from raw sequences with no hand-made lag features.
+      - Can model all 24 oblasts jointly.
+    - **Cons, given this project:**
+      - The data is small and the regime keeps changing: train starts 2025-10, with about 180k oblast-hours and few independent "attack nights". LSTMs overfit and need careful tuning.
+      - Slow on a 4-core CPU: minutes to hours, versus 3 s now.
+      - Poorly calibrated without extra work.
+      - Hard to explain.
+      - Sequence windows make leakage harder to audit.
+      - On tabular, event-count problems, gradient boosting with lag features usually matches or beats LSTMs.
+    
+    ### Better alternatives (cheap compute), in recommended order
+    1. **Keep LightGBM** (current). It is already the strong, cheap option; spend the effort on features (weather, Air Force Telegram threat posts).
+    2. **Hawkes / self-exciting point process:** models how alerts trigger more alerts, within an oblast and from neighbours. It fits in seconds and is a natural fit for alert cascades. Worth trying as an interpretable rival or as an added feature.
+    3. **Discrete-time hazard logistic regression** on the same features. Near-instant, calibrated, and a good sanity check.
+    4. If a neural model is ever wanted: a **small TCN or GRU** on the same hourly grid, or a zero-shot foundation model (Chronos/TimesFM). Both cost far more compute than the gain is likely worth here.
+    
+    ---
+    
+    ## Verification
+    - **UI:**
+      - Run `uv run python -m app` and open the dashboard.
+      - Confirm only the Today and Last 7 days tabs appear, both render in replay and Now mode, and there are no console errors.
+      - `curl /api/meta` should no longer include `metrics`.
+    - **Weather:**
+      - Run `PYTHONPATH=. uv run python exploration/02_feature_ablation.py --wandb` and compare validation metrics with and without weather.
+      - Run `uv run pytest`, including the new leakage test.
+      - Only if weather is adopted: run `uv run python -m training.train` and check the test metrics against the README table.
+    
+    Sources:
+    - [Open-Meteo Historical Forecast API](https://open-meteo.com/en/docs/historical-forecast-api)
+    - [Babel: Air Force on cloud/rain and attacks](https://babel.ua/en/news/96250-the-air-force-told-how-the-russians-use-cloudiness-and-rain-for-attacks-on-ukraine)
+    - [Ukrainska Pravda: weather and Iranian drones](https://www.pravda.com.ua/eng/news/2022/12/11/7380297)
+    - [Kyiv Independent: autumn rains help Shaheds](https://kyivindependent.com/ukraines-autumn-rains-help-shahed-type-drones-evade-ukrainian-air-defense/)
+[tool output]
+    File created successfully at: /home/vumenira/.claude/plans/hello-i-m-working-on-wondrous-sparrow.md (file state is current in your context — no need to Read it back)
+[tool call: ToolSearch]
+    {
+     "query": "select:ExitPlanMode",
+     "max_results": 1
+    }
+[tool output]
+
+[tool call: ExitPlanMode]
+    {
+     "plan": "# Plan: remove the Model tab, test a weather feature, answers about the models\n\n## Context\nYou asked for three things:\n1. Remove the \"Model\" tab from the dashboard's bottom panel. Its metrics are already in W&B.\n2. Find out whether oblast weather at a given time could be a feature for the start model.\n3. Answers to three questions: how the duration model works, pros and cons of an LSTM for \"will an alert start now\", and better alternatives that train cheaply.\n\n**One correction first:** the start model is **not an LSTM**. It is **LightGBM** (gradient-boosted trees) on hand-built hourly features (`training/start_model.py`), and it fits in about 3 s. The LSTM question is answered below as \"what if we switched to one\".\n\n---\n\n## Part 1: Remove the Model tab (UI)\n\n**`app/static/index.html`**\n- Delete the `<button class=\"seg\" data-view=\"model\">Model</button>` line (around line 60).\n\n**`app/static/app.js`**\n- Delete `renderModelView()`, `drawCurves()` and `drawCalibration()`, plus the `FEATURE_NAMES` constant (only the Model view uses it).\n- In `renderBottom()`, delete the `if (state.view === \"model\") return renderModelView();` line.\n- Simplify the `state.view !== \"model\"` checks:\n  - In `render()`: always call `renderBottom()`.\n  - In the resize handler: drop the model-only re-render. Glance charts already redraw through `render()`.\n- Change the section comment to `Today / Last 7 days`.\n\n**`app/server.py`, `/api/meta`**\n- Stop sending `metrics`, `calibration`, `importance` and `curves`. Nothing else in the frontend reads them (checked with grep).\n- `train.py` still writes `models/metrics.json`, so W&B logging and the README table don't change.\n\n**`app/static/style.css`**\n- Remove `--series-baseline`. Only the training-curve chart used it.\n\n**`CLAUDE.md`**\n- In the Dashboard command line, remove \"and a Model tab\".\n\n---\n\n## Part 2: Weather feature (research findings, then an experiment)\n\n### Findings\n- **Source:** Open-Meteo **Historical Forecast API** (`https://historical-forecast-api.open-meteo.com/v1/forecast`).\n  - Free, no key.\n  - Hourly data from 2022 on. The training window starts 2025-10-01, so it's covered.\n  - Variables include cloud cover (low/mid/high), wind speed and gusts, precipitation, visibility and temperature.\n- **Leakage:**\n  - Use the *historical forecast* archive, not ERA5 reanalysis. Reanalysis is \"true\" weather assimilated after the fact, which is not knowable at time `t`. The forecast archive holds what a forecast said ahead of time, so it obeys the CLAUDE.md no-leakage rule.\n  - For live \"Now\" mode, call the normal forecast API with the same variables.\n- **Domain evidence is mixed:**\n  - Air Force spokesman Ihnat says Shaheds and cruise missiles follow preset routes, so cloud and rain barely affect them.\n  - Strong wind and icing *can* ground drones.\n  - Russia appears to time attacks for overcast weather, because cloud hurts Ukrainian mobile fire groups.\n- **Caveat that limits the expected gain:** the threat starts far from the oblast (launch sites in Russia and the Black Sea). Local oblast weather is a weak proxy. The model's strongest feature is `starts_7d`, which already captures the attack regime. A realistic outcome is a small gain, or none.\n\n### Experiment (stays on validation, no peeking at the test set)\n1. **New module `training/weather.py`:**\n   - `fetch_weather(regions, start, end)` makes one batched request with comma-separated lat/lon lists, using one point per oblast at the admin-centre coordinates. It caches the result to `data/weather.parquet`, which is gitignored like the rest of `data/`.\n   - Hourly variables: `cloud_cover`, `cloud_cover_low`, `wind_speed_10m`, `wind_gusts_10m`, `precipitation`, `temperature_2m`, `visibility`.\n   - Also add a \"national\" aggregate: the mean over oblasts of wind and cloud. It's a cheap proxy for conditions along the route.\n2. **Feature join:** in `training/features.py`, add a `weather_features(feats, weather)` function that joins on `(region, t)`, using the forecast valid for hour `t`. Keep it out of `START_FEATURES` by default.\n3. **Ablation:** extend `exploration/02_feature_ablation.py` with baseline features vs. baseline + weather, scored on validation Brier, log loss and PR-AUC. Log to W&B with `--wandb`.\n4. **Decision rule:**\n   - If validation log loss improves meaningfully (more than about 0.5%), add the weather features to `START_FEATURES`, retrain, wire live fetching into `app/server.py`, and update the README.\n   - Otherwise, write up the negative result in the README and the AI log. A verified \"no gain\" is still a good process signal.\n5. **Leakage test:** add a test to `tests/test_no_leakage.py` asserting that the weather at row `t` comes from a forecast valid at `t`, never a later hour.\n\n---\n\n## Part 3: Answers to your questions (no code)\n\n### Duration model (`training/duration_model.py`)\n- **What it is:** a log-normal accelerated failure time (AFT) model, fitted with lifelines.\n  - It assumes `log(duration) ~ Normal(mu(x), sigma)`.\n  - `mu(x)` is linear in these inputs: oblast (one-hot), hour (sin/cos), number of oblasts currently on alert, and log of the previous alert's duration.\n  - Only the coefficients are exported to JSON. Prediction is closed-form numpy/scipy.\n- **\"Time left\" output:** the model returns quantiles conditioned on elapsed time: `S(t | lasted e) = S(t) / S(e)`. So the median end moves later as an alert drags on.\n- **Test results:**\n\n  | Metric | Model | Baseline |\n  |---|---|---|\n  | MAE of median | 19.3 min | 19.5 min (per-oblast median) |\n  | 80% interval coverage | 81% (well calibrated) | – |\n  | C-index | 0.61 (weak ranking) | – |\n\n  - sigma = 1.08, which is very wide: the 80% interval spans roughly ÷4 to ×4 around the median.\n- **Pros:**\n  - Tiny and fast (about 6 s).\n  - Gives a full calibrated distribution.\n  - Handles elapsed time exactly.\n  - Interpretable.\n- **Cons:**\n  - Barely beats the baseline point estimate.\n  - Linear in its features.\n  - Weibull fit better on validation (−4.31 vs −4.36 log-lik) but isn't used.\n  - Durations depend on the threat type (a drone wave vs. a ballistic missile), which the inputs don't include.\n  - Cheap upgrades: switch to Weibull, or use LightGBM with a survival objective.\n\n### LSTM for \"P(alert starts in the next hour)\"\n- **Pros:**\n  - Learns temporal patterns from raw sequences with no hand-made lag features.\n  - Can model all 24 oblasts jointly.\n- **Cons, given this project:**\n  - The data is small and the regime keeps changing: train starts 2025-10, with about 180k oblast-hours and few independent \"attack nights\". LSTMs overfit and need careful tuning.\n  - Slow on a 4-core CPU: minutes to hours, versus 3 s now.\n  - Poorly calibrated without extra work.\n  - Hard to explain.\n  - Sequence windows make leakage harder to audit.\n  - On tabular, event-count problems, gradient boosting with lag features usually matches or beats LSTMs.\n\n### Better alternatives (cheap compute), in recommended order\n1. **Keep LightGBM** (current). It is already the strong, cheap option; spend the effort on features (weather, Air Force Telegram threat posts).\n2. **Hawkes / self-exciting point process:** models how alerts trigger more alerts, within an oblast and from neighbours. It fits in seconds and is a natural fit for alert cascades. Worth trying as an interpretable rival or as an added feature.\n3. **Discrete-time hazard logistic regression** on the same features. Near-instant, calibrated, and a good sanity check.\n4. If a neural model is ever wanted: a **small TCN or GRU** on the same hourly grid, or a zero-shot foundation model (Chronos/TimesFM). Both cost far more compute than the gain is likely worth here.\n\n---\n\n## Verification\n- **UI:**\n  - Run `uv run python -m app` and open the dashboard.\n  - Confirm only the Today and Last 7 days tabs appear, both render in replay and Now mode, and there are no console errors.\n  - `curl /api/meta` should no longer include `metrics`.\n- **Weather:**\n  - Run `PYTHONPATH=. uv run python exploration/02_feature_ablation.py --wandb` and compare validation metrics with and without weather.\n  - Run `uv run pytest`, including the new leakage test.\n  - Only if weather is adopted: run `uv run python -m training.train` and check the test metrics against the README table.\n\nSources:\n- [Open-Meteo Historical Forecast API](https://open-meteo.com/en/docs/historical-forecast-api)\n- [Babel: Air Force on cloud/rain and attacks](https://babel.ua/en/news/96250-the-air-force-told-how-the-russians-use-cloudiness-and-rain-for-attacks-on-ukraine)\n- [Ukrainska Pravda: weather and Iranian drones](https://www.pravda.com.ua/eng/news/2022/12/11/7380297)\n- [Kyiv Independent: autumn rains help Shaheds](https://kyivindependent.com/ukraines-autumn-rains-help-shahed-type-drones-evade-ukrainian-air-defense/)\n",
+     "planFilePath": "/home/vumenira/.claude/plans/hello-i-m-working-on-wondrous-sparrow.md"
+    }
+[tool error]
+    The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.
+
+==== USER  (2026-10-12 16:11:26 UTC) ====
+[Request interrupted by user for tool use]
+
+==== CLAUDE (2026-10-12 16:12:06 UTC) ====
+No response requested.
+
+######## session 94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128 ########
+
+==== USER  (2026-10-12 16:12:37 UTC) ====
+/clear
+
+==== USER  (2026-10-12 16:12:52 UTC) ====
+<pasted_content id="2e65">
+Hello, I'm working on a project that does the analytics about air raid alerts in Ukraine reads the @README.md and @CLAUDE.md to get some context.
+  what I want from you is to do a couple of fixes for the UI and some architectural changes for the model.
+  In the UI on the bottom panel, there is three buttons, day, week, and model. Delete the model one, it's useless for me. I don't want to show the model metrics on the site. They're already showed WandB
+  About the model architecture, I would like you to research and find if there is a possibility to add a new feature for the model, a weather in Oblast at a particular time and uh, date. I believe this feature would be very useful for predicting whether there will be an air alert or not. And also I have a couple of questions I want you to tell me more about the model that we use for predicting how much time left till the end of the current alert. I want you to tell me about the pros and cons of using LSTM for predicting the probability of alert starting right now. And I want you to propose alternatives to it because I feel like using LSTM for a time series task is not optimal and there should be other better approaches. Keep in mind that we have very little compute and I would like to keep that training as fast as possible.
+</pasted_content id="2e65">
+[tool call: Bash]
+    ls app/static training && grep -n -i "model" app/static/*.html app/static/*.js | head -80 && wc -l app/static/* training/*.py app/server.py
+[tool output]
+    app/static:
+    app.js
+    index.html
+    oblasts.geojson
+    style.css
+    
+    training:
+    build_neighbors.py
+    data.py
+    duration_model.py
+    features.py
+    __init__.py
+    neighbors.json
+    __pycache__
+    start_model.py
+    train.py
+    app/static/index.html:45:      <div class="legend-item"><span class="swatch perm-swatch"></span>Permanent alert / no model</div>
+    app/static/index.html:60:          <button class="seg" data-view="model">Model</button>
+    app/static/app.js:90:  if (d.properties.permanent) return showTip(ev, `<b>${r}</b><br><span class="mono">Permanent alert since 2022 - not modelled</span>`);
+    app/static/app.js:159:    <div class="chart-legend"><span><i style="background:var(--series-model)"></i>P(start ≤ 1 h)</span><span><i style="background:var(--text-primary);width:2px;height:8px"></i>alert started</span></div>
+    app/static/app.js:185:    .attr("stroke", css("--series-model")).attr("stroke-width", 2).attr("d", d3.line((p) => x(p[0]), (p) => y(p[1])));
+    app/static/app.js:192:  vline(d.median_min, css("--series-model"), "4 3", `median ${mins(d.median_min)}`, 0);
+    app/static/app.js:228:  f.g.append("path").datum(ts.map((d, i) => [d, series.p[i]])).attr("fill", "none").attr("stroke", css("--series-model"))
+    app/static/app.js:247:/* ---------- bottom row: Today / Last 7 days / Model ---------- */
+    app/static/app.js:263:  if (state.view === "model") return renderModelView();
+    app/static/app.js:299:function renderModelView() {
+    app/static/app.js:333:    .attr("rx", 2).attr("fill", css("--series-model"))
+    app/static/app.js:346:    .attr("y", (d) => y(d.n)).attr("height", (d) => f.ih - y(d.n)).attr("rx", 2).attr("fill", css("--series-model"))
+    app/static/app.js:378:  const series = [["train_binary_logloss", "train", css("--series-model")], ["valid_binary_logloss", "validation", css("--series-baseline")]];
+    app/static/app.js:397:  f.g.append("path").datum(data).attr("fill", "none").attr("stroke", css("--series-model")).attr("stroke-width", 2)
+    app/static/app.js:400:    .attr("fill", css("--series-model")).attr("stroke", css("--panel")).attr("stroke-width", 2)
+    app/static/app.js:420:  if (state.view !== "model") renderBottom(); // situation stats follow the selected time
+    app/static/app.js:467:  window.addEventListener("resize", () => { drawMap(); if (state.snap) render(); if (state.view === "model") renderBottom(); });
+       471 app/static/app.js
+        74 app/static/index.html
+         0 app/static/oblasts.geojson
+       155 app/static/style.css
+        44 training/build_neighbors.py
+        52 training/data.py
+       103 training/duration_model.py
+       129 training/features.py
+         0 training/__init__.py
+        87 training/start_model.py
+       164 training/train.py
+       217 app/server.py
+      1496 total
+[tool call: Bash]
+    sed -n 50,74p app/static/index.html && sed -n 1,40p app/static/app.js && sed -n 240,471p app/static/app.js && grep -n "metrics\|@app\.\(get\)" app/server.py && grep -n -i "model-\|\.model\|metric" app/static/style.css
+[tool output]
+        <div class="panel-head" id="detail-title">Select a region</div>
+        <div id="detail" class="detail"></div>
+      </section>
+    
+      <section class="bottom">
+        <div class="panel">
+          <div class="panel-head">
+            <div class="mode tabs" id="bottom-tabs">
+              <button class="seg active" data-view="today">Today</button>
+              <button class="seg" data-view="week">Last 7 days</button>
+              <button class="seg" data-view="model">Model</button>
+            </div>
+            <span id="glance-note" class="muted small"></span>
+          </div>
+          <div id="kpis" class="kpis"></div>
+        </div>
+        <div class="panel chart-card"><div class="panel-head" id="c1-head"></div><div id="c1" class="chart"></div></div>
+        <div class="panel chart-card wide"><div class="panel-head" id="c2-head"></div><div id="c2" class="chart"></div></div>
+        <div class="panel chart-card"><div class="panel-head" id="c3-head"></div><div id="c3" class="chart"></div></div>
+      </section>
+    </main>
+    <div id="tooltip" class="tooltip" hidden></div>
+    <script src="/static/app.js"></script>
+    </body>
+    </html>
+    /* Air Raid Forecast dashboard: map + ranking + region detail + test-period statistics. */
+    const $ = (id) => document.getElementById(id);
+    const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+    
+    const state = { meta: null, mode: "replay", idx: 0, snap: null, selected: null, timer: null, nowTimer: null, geo: null, view: "today" };
+    
+    const fmtKyiv = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Kyiv", weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    const fmtShort = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Kyiv", day: "2-digit", month: "short" });
+    const fmtHM = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" });
+    const pct = (p) => `${Math.round(p * 100)}%`;
+    const mins = (m) => (m >= 90 ? `${Math.floor(m / 60)}h ${String(Math.round(m % 60)).padStart(2, "0")}m` : `${Math.round(m)} min`);
+    const endTime = (d) => `~${fmtHM.format(new Date(d.expected_end))}`;
+    const label = (r) => state.meta.regions.find((x) => x.region === r)?.label ?? r;
+    
+    // Discrete sequential scale (one hue, dark -> light on a dark surface)
+    const RAMP = ["--seq-0", "--seq-1", "--seq-2", "--seq-3", "--seq-4", "--seq-5"].map(css);
+    const riskColor = d3.scaleThreshold().domain([0.1, 0.2, 0.35, 0.5, 0.65]).range(RAMP);
+    
+    /* ---------- tooltip ---------- */
+    const tip = $("tooltip");
+    function showTip(ev, html) {
+      tip.innerHTML = html; tip.hidden = false;
+      const { innerWidth: W, innerHeight: H } = window;
+      const r = tip.getBoundingClientRect();
+      tip.style.left = `${Math.min(ev.clientX + 14, W - r.width - 8)}px`;
+      tip.style.top = `${Math.min(ev.clientY + 14, H - r.height - 8)}px`;
+    }
+    const hideTip = () => (tip.hidden = true);
+    
+    /* ---------- data ---------- */
+    const getJSON = async (url) => {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`${url}: ${r.status} ${await r.text()}`);
+      return r.json();
+    };
+    
+    let requestSeq = 0;
+    async function loadSnapshot() {
+      // Responses can arrive out of order (/api/now is slow); only the latest request may render.
+      const seq = ++requestSeq;
+          line.style("display", null).attr("x1", x(ts[i])).attr("x2", x(ts[i]));
+          showTip(ev, html(i));
+        })
+        .on("mouseleave", () => { line.style("display", "none"); hideTip(); })
+        .on("click", (ev) => onClick && onClick(bis(ts, x.invert(d3.pointer(ev)[0]))));
+    }
+    
+    /* ---------- bottom row: Today / Last 7 days / Model ---------- */
+    const tile = (k, v, d = "", cls = "") => `<div class="kpi"><span class="k">${k}</span><span class="v">${v}</span><span class="d ${cls}">${d}</span></div>`;
+    const cards = () => [1, 2, 3].map((i) => ({ head: $(`c${i}-head`), el: $(`c${i}`) }));
+    const FEATURE_NAMES = { region: "Oblast", hour_kyiv: "Hour of day", dow_kyiv: "Day of week", min_since_last_end: "Time since last alert",
+      starts_24h: "Alerts last 24 h", starts_7d: "Alerts last 7 d", n_active_oblasts: "Oblasts on alert now", national_starts_1h: "National starts 1 h",
+      nb_active_frac: "Neighbours on alert", nb_starts_1h: "Neighbour starts 1 h" };
+    
+    function setView(v) {
+      state.view = v;
+      document.querySelectorAll("#bottom-tabs .seg").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
+      renderBottom();
+    }
+    
+    let bottomSeq = 0;
+    async function renderBottom() {
+      const seq = ++bottomSeq;
+      if (state.view === "model") return renderModelView();
+      if (!state.snap) return;
+      const live = state.mode === "now";
+      const period = state.view === "today" ? "today" : "week";
+      let g;
+      try {
+        g = await getJSON(`/api/glance?t=${encodeURIComponent(state.snap.t)}&period=${period}&live=${live}`);
+      } catch (e) { $("glance-note").innerHTML = `<span class="warn">${e.message}</span>`; return; }
+      if (seq !== bottomSeq) return; // a newer request (time step / tab switch) superseded this one
+      renderGlance(g);
+    }
+    
+    function renderGlance(g) {
+      const [c1, c2, c3] = cards();
+      const span = g.period === "today" ? `since 00:00 Kyiv` : `${fmtShort.format(new Date(g.start))} – ${fmtShort.format(new Date(g.end))}`;
+      $("glance-note").innerHTML = span + (g.data_until ? ` · <span class="warn">history only until ${fmtKyiv.format(new Date(g.data_until))}</span>` : "");
+      const L = g.longest, P = g.peak;
+      $("kpis").innerHTML =
+        tile("Alerts started", g.alerts_started, g.period === "today" ? "today" : "last 7 days") +
+        tile("Alert-hours", `${g.alert_hours}h`, "summed over oblasts") +
+        tile("Oblasts affected", `${g.oblasts_affected}/${g.oblasts_total}`, "had at least one alert") +
+        tile("Median duration", g.median_duration_min == null ? "—" : mins(g.median_duration_min), "finished alerts") +
+        tile("Longest alert", L ? mins(L.minutes) : "—", L ? `${label(L.region)}${L.ongoing ? " · ongoing" : ""}` : "") +
+        tile("Peak at once", P ? `${P.oblasts} obl.` : "—", P ? fmtKyiv.format(new Date(P.t)) : "");
+    
+      c1.head.innerHTML = `Most affected oblasts <span class="muted">alert-hours</span>`;
+      drawBars(c1.el, g.by_region.slice(0, 8).map((d) => ({ k: d.label, v: d.hours, tip: `<b>${d.label}</b><br>${d.hours.toFixed(1)} alert-hours · ${d.alerts} alerts started` })),
+        (v) => `${v.toFixed(1)}h`, 105);
+    
+      c2.head.innerHTML = `Oblasts under alert <span class="muted">${g.period === "today" ? "every 10 min" : "hourly"}</span>`;
+      drawTimeline(c2.el, g.timeline);
+    
+      c3.head.innerHTML = `How long alerts lasted <span class="muted">finished alerts</span>`;
+      drawColumns(c3.el, g.durations);
+    }
+    
+    function renderModelView() {
+      const m = state.meta.metrics;
+      const [c1, c2, c3] = cards();
+      $("glance-note").textContent = `test period ${fmtShort.format(new Date(m.test_start))} – ${fmtShort.format(new Date(m.test_end))}`;
+      const rel = (a, b, lowerBetter) => {
+        const diff = ((a - b) / b) * 100, better = lowerBetter ? diff < 0 : diff > 0;
+        return [`${diff > 0 ? "+" : ""}${diff.toFixed(1)}% vs baseline ${b.toFixed(3)}`, better ? "better" : "worse"];
+      };
+      const [bd, bc] = rel(m.start_brier, m.start_baseline_brier, true);
+      const [ad, ac] = rel(m.start_roc_auc, m.start_baseline_roc_auc, false);
+      const [pd_, pc] = rel(m.start_pr_auc, m.start_baseline_pr_auc, false);
+      const [md, mc] = rel(m.dur_mae_median_min, m.dur_mae_baseline_min, true);
+      $("kpis").innerHTML =
+        tile("Start · Brier", m.start_brier.toFixed(3), bd, bc) +
+        tile("Start · ROC-AUC", m.start_roc_auc.toFixed(3), ad, ac) +
+        tile("Start · PR-AUC", m.start_pr_auc.toFixed(3), pd_, pc) +
+        tile("Duration · MAE", `${m.dur_mae_median_min.toFixed(1)}m`, md.replace(/baseline ([\d.]+)/, "baseline $1m"), mc) +
+        tile("Duration · 80% cover", pct(m.dur_coverage_80), "target 80%", Math.abs(m.dur_coverage_80 - 0.8) < 0.05 ? "better" : "worse") +
+        tile("Duration · C-index", m.dur_c_index.toFixed(3), `${m.dur_test_events} test alerts`);
+      c1.head.innerHTML = `Calibration <span class="muted">test period</span>`;
+      drawCalibration(c1.el);
+      c2.head.innerHTML = `Training curve <span class="muted">log loss per boosting round</span>`;
+      drawCurves(c2.el);
+      c3.head.innerHTML = `What drives the forecast <span class="muted">LightGBM gain</span>`;
+      const imp = Object.entries(state.meta.importance).map(([k, v]) => ({ k: FEATURE_NAMES[k] ?? k, v }));
+      const total = d3.sum(imp, (d) => d.v);
+    [... 157 more lines truncated]
+[tool call: Bash]
+    sed -n 20,80p app/server.py && grep -n "meta\.\(metrics\|curves\|calibration\|importance\)\|FEATURE_NAMES\|frame(" app/static/app.js | head; grep -rn "metrics\|curves\|importance\|calibration" tests/ | head
+[tool output]
+    LIVE_URL = "https://ubilling.net.ua/aerialalerts/"
+    CURVE_GRID = np.arange(1, 241)  # minutes, for survival curves
+    
+    app = FastAPI(title="Air Raid Alert Forecast")
+    app.mount("/static", StaticFiles(directory=STATIC), name="static")
+    
+    
+    @lru_cache
+    def artifacts() -> dict:
+        missing = [f for f in ["start_model.txt", "duration_model.json", "metrics.json", "replay_start.parquet"]
+                   if not (MODELS_DIR / f).exists()]
+        if missing:
+            raise RuntimeError(f"missing {missing} in models/ - run `uv run python -m training.train` first")
+        replay = pd.read_parquet(MODELS_DIR / "replay_start.parquet")
+        alerts = pd.read_parquet(MODELS_DIR / "replay_alerts.parquet")
+        dur = duration_model.load(MODELS_DIR / "duration_model.json")
+        regs = dur["regions"]
+        # duration distribution parameters for every alert in the replay window (features known at its start)
+        alerts = alerts[alerts.region.isin(regs)].reset_index(drop=True)
+        alerts["mu"], sigma = duration_model.predict_mu_sigma(dur, duration_features(alerts, alerts, regs))
+        return {
+            "start": start_model.load(MODELS_DIR / "start_model.txt"),
+            "dur": dur, "sigma": sigma, "regions": regs,
+            "metrics": json.loads((MODELS_DIR / "metrics.json").read_text()),
+            "replay": replay, "alerts": alerts, "times": sorted(replay.t.unique()),
+        }
+    
+    
+    def opt(x) -> float | None:
+        return None if pd.isna(x) else float(x)
+    
+    
+    def duration_summary(mu: float, sigma: float, elapsed: float, started_at: pd.Timestamp) -> dict:
+        q = lambda p: float(duration_model.quantile(mu, sigma, p, elapsed))
+        return {
+            "elapsed_min": elapsed, "median_min": q(0.5), "p10_min": q(0.1), "p90_min": q(0.9),
+            "expected_end": (started_at + pd.Timedelta(minutes=q(0.5))).isoformat(),
+            "curve": duration_model.survival_curve(mu, sigma, CURVE_GRID.astype(float), elapsed).round(4).tolist(),
+        }
+    
+    
+    @app.get("/")
+    def index():
+        return FileResponse(STATIC / "index.html")
+    
+    
+    @app.get("/api/meta")
+    def meta():
+        a = artifacts()
+        r, m = a["replay"], a["metrics"]
+        national = r.groupby("t").agg(starts=("y", "sum"), active=("active_now", "sum"), p_sum=("p_start", "sum"))  # NaN skipped
+        return {
+            "regions": [{"region": x, "label": LABELS[x]} for x in a["regions"]],
+            "times": [t.isoformat() for t in a["times"]],
+            "metrics": m["metrics"], "calibration": m["calibration"], "importance": m["importance"],
+            "curves": m.get("curves", []),
+            "national": {"t": [t.isoformat() for t in national.index], **{c: national[c].round(2).tolist() for c in national}},
+            "curve_grid": CURVE_GRID.tolist(),
+        }
+    
+    
+    171:function frame(el, m = { t: 8, r: 12, b: 20, l: 34 }) {
+    178:  const f = frame($("survival"));
+    207:  const f = frame($("history"), { t: 4, r: 12, b: 18, l: 12 });
+    220:  const f = frame($("series"));
+    250:const FEATURE_NAMES = { region: "Oblast", hour_kyiv: "Hour of day", dow_kyiv: "Day of week", min_since_last_end: "Time since last alert",
+    300:  const m = state.meta.metrics;
+    323:  const imp = Object.entries(state.meta.importance).map(([k, v]) => ({ k: FEATURE_NAMES[k] ?? k, v }));
+    329:  const f = frame(el, { t: 6, r: 50, b: 6, l: labelWidth });
+    340:  const f = frame(el, { t: 14, r: 10, b: 20, l: 30 });
+    353:  const f = frame(el, { t: 10, r: 14, b: 22, l: 30 });
+[tool call: Bash]
+    python3 - <<'EOF'
+    import re, pathlib
+    p = pathlib.Path("app/static/app.js"); s = p.read_text()
+    def cut(s, start, end):
+        i = s.index(start); j = s.index(end, i)
+        return s[:i] + s[j:]
+    s = s.replace("/* ---------- bottom row: Today / Last 7 days / Model ---------- */", "/* ---------- bottom row: Today / Last 7 days ---------- */")
+    s = cut(s, "const FEATURE_NAMES", "function setView")
+    s = s.replace('  if (state.view === "model") return renderModelView();\n', "")
+    s = cut(s, "function renderModelView()", "function drawBars")
+    s = cut(s, "function drawCurves(el)", "/* ---------- orchestration")
+    s = s.replace('  if (state.view !== "model") renderBottom(); // situation stats follow the selected time', '  renderBottom(); // situation stats follow the selected time')
+    s = s.replace(' if (state.view === "model") renderBottom(); });', ' });')
+    p.write_text(s)
+    h = pathlib.Path("app/static/index.html"); t = h.read_text()
+    t = t.replace('          <button class="seg" data-view="model">Model</button>\n', ""); h.write_text(t)
+    v = pathlib.Path("app/server.py"); t = v.read_text()
+    t = t.replace('''        "metrics": m["metrics"], "calibration": m["calibration"], "importance": m["importance"],
+            "curves": m.get("curves", []),
+    ''', "").replace('r, m = a["replay"], a["metrics"]', 'r = a["replay"]')
+    v.write_text(t)
+    EOF
+    grep -n "model\|metrics\|calibration\|curves\|importance" app/static/app.js app/static/index.html | grep -v "series-model\|no model\|not modelled"; grep -n '"metrics"' app/server.py
+    sed -i 's/(`\/api\/glance`, computed only from alerts known at the selected time) and a Model tab\./(`\/api\/glance`, computed only from alerts known at the selected time). Model metrics live in W\&B and `models\/metrics.json`, not in the UI./' CLAUDE.md; grep -n "glance" CLAUDE.md
+[tool output]
+    43:        "metrics": json.loads((MODELS_DIR / "metrics.json").read_text()),
+    44:- Dashboard: `uv run python -m app [--port 8000]`. The bottom row has Today / Last 7 days tabs (`/api/glance`, computed only from alerts known at the selected time). Model metrics live in W&B and `models/metrics.json`, not in the UI.
+[tool call: Bash]
+    grep -n 'a\["metrics"\]\|\["metrics"\]\|json\.' app/server.py
+[tool output]
+    43:        "metrics": json.loads((MODELS_DIR / "metrics.json").read_text()),
+    174:    raw = json.loads(urlopen(req, timeout=10).read())["states"]
+
+==== CLAUDE (2026-10-12 16:13:18 UTC) ====
+The Model tab is removed. Now I'm deleting the server's now-unused metrics loading, then testing the app.
+[tool call: Bash]
+    sed -i '/"metrics": json.loads((MODELS_DIR \/ "metrics.json").read_text()),/d; s/\["start_model.txt", "duration_model.json", "metrics.json", "replay_start.parquet"\]/["start_model.txt", "duration_model.json", "replay_start.parquet"]/' app/server.py && node --check app/static/app.js && uv run pytest -q 2>&1 | tail -2 && (uv run python -m app --port 8765 >/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad/srv.log 2>&1 &) && for i in $(seq 20); do curl -sf localhost:8765/api/meta >/dev/null && break; sleep 1; done; curl -s localhost:8765/api/meta | python3 -c "import json,sys; print(list(json.load(sys.stdin)))"; T=$(curl -s localhost:8765/api/meta | python3 -c "import json,sys; print(json.load(sys.stdin)['times'][-1])"); curl -s "localhost:8765/api/glance?t=$T&period=today&live=false" | head -c 200; echo; curl -s localhost:8765/ | grep -c 'data-view'; pkill -f "app --port 8765"
+[tool error]
+    Exit code 144
+    /bin/bash: line 1: node: command not found
+    Traceback (most recent call last):
+      File "<string>", line 1, in <module>
+        import json,sys; print(list(json.load(sys.stdin)))
+                                    ~~~~~~~~~^^^^^^^^^^^
+      File "/home/vumenira/.local/share/uv/python/cpython-3.13.16-linux-x86_64-gnu/lib/python3.13/json/__init__.py", line 298, in load
+        return loads(fp.read(),
+            cls=cls, object_hook=object_hook,
+            parse_float=parse_float, parse_int=parse_int,
+            parse_constant=parse_constant, object_pairs_hook=object_pairs_hook, **kw)
+      File "/home/vumenira/.local/share/uv/python/cpython-3.13.16-linux-x86_64-gnu/lib/python3.13/json/__init__.py", line 352, in loads
+        return _default_decoder.decode(s)
+               ~~~~~~~~~~~~~~~~~~~~~~~^^^
+      File "/home/vumenira/.local/share/uv/python/cpython-3.13.16-linux-x86_64-gnu/lib/python3.13/json/decoder.py", line 345, in decode
+        obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+                   ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+      File "/home/vumenira/.local/share/uv/python/cpython-3.13.16-linux-x86_64-gnu/lib/python3.13/json/decoder.py", line 363, in raw_decode
+        raise JSONDecodeError("Expecting value", s, err.value) from None
+    json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+    Traceback (most recent call last):
+      File "<string>", line 1, in <module>
+        import json,sys; print(json.load(sys.stdin)['times'][-1])
+                               ~~~~~~~~~^^^^^^^^^^^
+      File "/home/vumenira/.local/share/uv/python/cpython-3.13.16-linux-x86_64-gnu/lib/python3.13/json/__init__.py", line 298, in load
+        return loads(fp.read(),
+            cls=cls, object_hook=object_hook,
+            parse_float=parse_float, parse_int=parse_int,
+            parse_constant=parse_constant, object_pairs_hook=object_pairs_hook, **kw)
+      File "/home/vumenira/.local/share/uv/python/cpython-3.13.16-linux-x86_64-gnu/lib/python3.13/json/__init__.py", line 352, in loads
+        return _default_decoder.decode(s)
+               ~~~~~~~~~~~~~~~~~~~~~~~^^^
+      File "/home/vumenira/.local/share/uv/python/cpython-3.13.16-linux-x86_64-gnu/lib/python3.13/json/decoder.py", line 345, in decode
+        obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+                   ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+      File "/home/vumenira/.local/share/uv/python/cpython-3.13.16-linux-x86_64-gnu/lib/python3.13/json/decoder.py", line 363, in raw_decode
+        raise JSONDecodeError("Expecting value", s, err.value) from None
+    json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+    
+    0
+
+==== CLAUDE (2026-10-12 16:13:24 UTC) ====
+`node` isn't installed, so the chain stopped before the server started. I'll run the steps one at a time.
+[tool call: Bash]
+    grep -n "metrics" app/server.py; uv run pytest -q 2>&1 | tail -2; SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad; nohup uv run python -m app --port 8765 > $SP/srv.log 2>&1 &
+    for i in $(seq 30); do curl -sf localhost:8765/api/meta -o $SP/meta.json && break; sleep 1; done; tail -3 $SP/srv.log; python3 -c "
+    import json; m=json.load(open('$SP/meta.json')); print(list(m)); print(m['times'][-1])" ; T=$(python3 -c "import json; print(json.load(open('$SP/meta.json'))['times'][-1])"); curl -s -G localhost:8765/api/glance --data-urlencode "t=$T" -d period=week -d live=false | head -c 150; echo; curl -s localhost:8765/ | grep 'data-view'; curl -s localhost:8765/static/app.js | grep -c "renderModelView\|drawCurves\|drawCalibration"; pkill -f "app --port 8765"
+[tool error]
+    Exit code 144
+    -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+    4 passed, 5 warnings in 39.66s
+    INFO:     Uvicorn running on http://127.0.0.1:8765 (Press CTRL+C to quit)
+    Dashboard: http://127.0.0.1:8765
+    INFO:     127.0.0.1:39144 - "GET /api/meta HTTP/1.1" 200 OK
+    ['regions', 'times', 'national', 'curve_grid']
+    2026-10-12T03:00:00+00:00
+    {"period":"week","start":"2026-10-05T03:00:00+00:00","end":"2026-10-12T03:00:00+00:00","data_until":null,"alerts_started":1204,"alert_hours":510.1,"ob
+              <button class="seg active" data-view="today">Today</button>
+              <button class="seg" data-view="week">Last 7 days</button>
+    0
+
+==== CLAUDE (2026-10-12 16:14:14 UTC) ====
+Tests pass and the endpoints work. Exit code 144 only means `pkill` matched its own shell. There's no `node` for a JS syntax check, so I'll read over the edited spots by eye:
+[tool call: Bash]
+    grep -n -A3 "^const cards\|^function renderGlance\|^  drawColumns(c3.el\|^/\* ---------- orchestration\|addEventListener(\"resize\"" app/static/app.js; sed -n '/^function drawTimeline/,/^}/p' app/static/app.js | tail -3; git diff --stat 2>/dev/null | tail -1
+[tool output]
+    249:const cards = () => [1, 2, 3].map((i) => ({ head: $(`c${i}-head`), el: $(`c${i}`) }));
+    250-function setView(v) {
+    251-  state.view = v;
+    252-  document.querySelectorAll("#bottom-tabs .seg").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
+    --
+    270:function renderGlance(g) {
+    271-  const [c1, c2, c3] = cards();
+    272-  const span = g.period === "today" ? `since 00:00 Kyiv` : `${fmtShort.format(new Date(g.start))} – ${fmtShort.format(new Date(g.end))}`;
+    273-  $("glance-note").innerHTML = span + (g.data_until ? ` · <span class="warn">history only until ${fmtKyiv.format(new Date(g.data_until))}</span>` : "");
+    --
+    291:  drawColumns(c3.el, g.durations);
+    292-}
+    293-
+    294-function drawBars(el, data, fmt, labelWidth) {
+    --
+    334:/* ---------- orchestration ---------- */
+    335-function render() {
+    336-  const t = new Date(state.snap.t);
+    337-  $("clock-kyiv").textContent = `${fmtKyiv.format(t)} Kyiv`;
+    --
+    395:  window.addEventListener("resize", () => { drawMap(); if (state.snap) render(); });
+    396-  await loadSnapshot();
+    397-}
+    398-
+        .attr("d", d3.line((p) => x(p[0]), (p) => y(p[1])).curve(d3.curveStepAfter));
+      hoverTime(f, x, ts, (i) => `${fmtKyiv.format(ts[i])}<br><b>${tl.active[i]}</b> oblasts under alert`);
+    }
+[tool call: Bash]
+    sed -i 's/^const cards = () => \(.*\)$/const cards = () => \1\n/' app/static/app.js && SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad; curl -s -m 30 "https://historical-forecast-api.open-meteo.com/v1/forecast?latitude=50.45,49.99&longitude=30.52,36.23&start_date=2025-10-01&end_date=2026-10-11&hourly=cloud_cover,wind_speed_10m,precipitation,visibility&timezone=UTC" -o $SP/wx.json; python3 -c "
+    import json; d=json.load(open('$SP/wx.json')); d=d if isinstance(d,list) else [d]
+    for x in d: h=x.get('hourly',{}); print(x.get('error'), x.get('reason'), len(h.get('time',[])), h.get('time',[None])[0], h.get('time',[None])[-1], {k:sum(v is None for v in h[k]) for k in h if k!='time'})"; ls -la $SP/wx.json
+[tool output]
+    None None 9024 2025-10-01T00:00 2026-10-11T23:00 {'cloud_cover': 0, 'wind_speed_10m': 0, 'precipitation': 0, 'visibility': 0}
+    None None 9024 2025-10-01T00:00 2026-10-11T23:00 {'cloud_cover': 0, 'wind_speed_10m': 0, 'precipitation': 0, 'visibility': 0}
+    -rw-rw-r-- 1 vumenira vumenira 725484 Oct 12 19:14 /tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad/wx.json
+[tool call: Bash]
+    cat exploration/02_feature_ablation.py && cat training/start_model.py && sed -n 1,60p training/train.py
+[tool output]
+    """Feature ablation for the start model, scored on the VALIDATION window only (test stays untouched).
+    
+    Usage: PYTHONPATH=. uv run python exploration/02_feature_ablation.py [--wandb]
+    """
+    import argparse
+    
+    from training import start_model
+    from training.data import load_alerts, regions
+    from training.features import START_FEATURES
+    from training.train import init_wandb, split_times, start_feature_frame
+    
+    BASE = [f for f in START_FEATURES if f not in ("nb_active_frac", "nb_starts_1h")]
+    SINCOS = lambda fs: [f for f in fs if f not in ("hour_kyiv", "dow_kyiv")] + ["hour_sin", "hour_cos", "dow_sin", "dow_cos"]
+    VARIANTS = {
+        "raw_time": BASE,
+        "sincos_time": SINCOS(BASE),
+        "raw_time+neighbors": BASE + ["nb_active_frac", "nb_starts_1h"],
+        "sincos_time+neighbors": SINCOS(BASE) + ["nb_active_frac", "nb_starts_1h"],
+    }
+    
+    
+    def main() -> None:
+        ap = argparse.ArgumentParser()
+        ap.add_argument("--wandb", action="store_true")
+        args = ap.parse_args()
+        alerts = load_alerts()
+        regs = regions(alerts)
+        valid_start, test_start, grid_end = split_times(alerts)
+        feats, y = start_feature_frame(alerts, regs, grid_end)
+        calm = (feats.active_now == 0).to_numpy()
+        tr = (feats.t < valid_start).to_numpy() & calm
+        va = ((feats.t >= valid_start) & (feats.t < test_start)).to_numpy() & calm
+    
+        print(f"{'variant':24s} {'rounds':>6s} {'logloss':>8s} {'brier':>7s} {'auc':>6s} {'pr_auc':>6s}")
+        for name, fs in VARIANTS.items():
+            booster, curves = start_model.fit_with_validation(feats[tr], y[tr], feats[va], y[va], features=fs)
+            m = start_model.metrics(y[va], start_model.predict(booster, feats[va]), "valid")
+            print(f"{name:24s} {booster.best_iteration:6d} {m['valid_logloss']:8.4f} {m['valid_brier']:7.4f} "
+                  f"{m['valid_roc_auc']:6.4f} {m['valid_pr_auc']:6.4f}")
+            if args.wandb:
+                run = init_wandb(True, {"variant": name, "features": fs})
+                run.tags = ("ablation",)
+                for i, (a, b) in enumerate(zip(curves["train"]["binary_logloss"], curves["valid"]["binary_logloss"])):
+                    run.log({"boosting_round": i + 1, "start/train_logloss": a, "start/valid_logloss": b})
+                run.summary.update({**m, "best_rounds": booster.best_iteration})
+                run.finish()
+    
+    
+    if __name__ == "__main__":
+        main()
+    """Model 1: probability that an alert starts in a region within the next hour (LightGBM)."""
+    from pathlib import Path
+    
+    import lightgbm as lgb
+    import numpy as np
+    import pandas as pd
+    from sklearn.metrics import average_precision_score, brier_score_loss, log_loss, roc_auc_score
+    
+    from training.features import START_FEATURES
+    
+    PARAMS = {
+        "objective": "binary",
+        "learning_rate": 0.05,
+        "num_leaves": 31,
+        "min_data_in_leaf": 100,
+        "feature_fraction": 0.9,
+        "verbose": -1,
+        "seed": 0,
+        "num_threads": 4,  # physical cores; 8 hyper-threads oversubscribe a busy 4-core laptop badly
+    }
+    MAX_ROUNDS = 3000
+    EARLY_STOPPING = 100  # stop when validation log loss hasn't improved for this many rounds
+    
+    
+    def _dataset(X: pd.DataFrame, y: np.ndarray, features: list[str], reference=None) -> lgb.Dataset:
+        cat = ["region"] if "region" in features else []
+        return lgb.Dataset(X[features], y, categorical_feature=cat, reference=reference, free_raw_data=False)
+    
+    
+    def fit_with_validation(X_tr, y_tr, X_va, y_va, features=START_FEATURES) -> tuple[lgb.Booster, dict]:
+        """Early-stopped fit; returns the booster and per-round train/valid curves (log loss, AUC)."""
+        curves: dict = {}
+        dtr = _dataset(X_tr, y_tr, features)
+        dva = _dataset(X_va, y_va, features, reference=dtr)
+        booster = lgb.train(
+            {**PARAMS, "metric": ["binary_logloss", "auc"]}, dtr, MAX_ROUNDS,
+            valid_sets=[dtr, dva], valid_names=["train", "valid"],
+            callbacks=[lgb.early_stopping(EARLY_STOPPING, first_metric_only=True, verbose=False),
+                       lgb.record_evaluation(curves)],
+        )
+        return booster, curves
+    
+    
+    def fit(X: pd.DataFrame, y: np.ndarray, rounds: int, features=START_FEATURES) -> lgb.Booster:
+        """Final refit with a fixed number of rounds (chosen on validation)."""
+        return lgb.train(PARAMS, _dataset(X, y, features), rounds)
+    
+    
+    def predict(model: lgb.Booster, X: pd.DataFrame) -> np.ndarray:
+        # use the features the model was trained with; best_iteration is 0 (= all trees) for refit models
+        return model.predict(X[model.feature_name()], num_iteration=model.best_iteration or None)
+    
+    
+    def baseline_table(X: pd.DataFrame, y: np.ndarray) -> pd.Series:
+        """Historical rate per (region, Kyiv hour) on the training set."""
+        return pd.Series(y, index=X.index).groupby([X.region, X.hour_kyiv], observed=True).mean()
+    
+    
+    def baseline_predict(table: pd.Series, X: pd.DataFrame) -> np.ndarray:
+        idx = pd.MultiIndex.from_arrays([X.region.astype(str), X.hour_kyiv])
+        table = table.copy()
+        table.index = table.index.set_levels(table.index.levels[0].astype(str), level=0)
+        return table.reindex(idx).fillna(table.mean()).to_numpy()
+    
+    
+    def metrics(y: np.ndarray, p: np.ndarray, prefix: str) -> dict:
+        p = np.clip(p, 1e-6, 1 - 1e-6)
+        return {
+            f"{prefix}_brier": brier_score_loss(y, p),
+            f"{prefix}_logloss": log_loss(y, p),
+            f"{prefix}_roc_auc": roc_auc_score(y, p),
+            f"{prefix}_pr_auc": average_precision_score(y, p),
+        }
+    
+    
+    def calibration(y: np.ndarray, p: np.ndarray, bins: int = 10) -> pd.DataFrame:
+        b = np.minimum((p * bins).astype(int), bins - 1)
+        df = pd.DataFrame({"bin": b, "p": p, "y": y}).groupby("bin").agg(mean_pred=("p", "mean"), frac_pos=("y", "mean"), n=("y", "size"))
+        return df.reset_index()
+    
+    
+    def save(model: lgb.Booster, path: Path) -> None:
+        model.save_model(str(path))
+    
+    
+    def load(path: Path) -> lgb.Booster:
+        return lgb.Booster(model_file=str(path))
+    """Train both models on a time-ordered split and save artifacts.
+    
+        train [TRAIN_START, valid_start) -> valid [valid_start, test_start) -> test [test_start, end]
+    
+    Validation picks the number of boosting rounds (early stopping) and the duration distribution family;
+    the final models are refit on train+valid and evaluated once on the test window.
+    
+    Usage: uv run python -m training.train [--refresh] [--no-wandb]
+    """
+    import argparse
+    import json
+    import os
+    import time
+    [... 47 more lines truncated]
+[tool call: Bash]
+    sed -n 1,40p app/regions.py && sed -n 1,25p training/build_neighbors.py && python3 -c "import json; g=json.load(open('app/static/oblasts.geojson')); print(g['features'][0]['properties'])"
+[tool output]
+    """Name mapping between the dataset (eTryvoga), the map (geoBoundaries) and the live feed (ubilling)."""
+    
+    # dataset name -> (geoBoundaries shapeName, ubilling Ukrainian name)
+    REGIONS = {
+        "Cherkaska oblast": ("Cherkasy Oblast", "Черкаська область"),
+        "Chernihivska oblast": ("Chernihiv Oblast", "Чернігівська область"),
+        "Chernivetska oblast": ("Chernivtsi Oblast", "Чернівецька область"),
+        "Dnipropetrovska oblast": ("Dnipropetrovsk Oblast", "Дніпропетровська область"),
+        "Donetska oblast": ("Donetsk Oblast", "Донецька область"),
+        "Ivano-Frankivska oblast": ("Ivano-Frankivsk Oblast", "Івано-Франківська область"),
+        "Kharkivska oblast": ("Kharkiv Oblast", "Харківська область"),
+        "Khersonska oblast": ("Kherson Oblast", "Херсонська область"),
+        "Khmelnytska oblast": ("Khmelnytskyi Oblast", "Хмельницька область"),
+        "Kirovohradska oblast": ("Kirovohrad Oblast", "Кіровоградська область"),
+        "Kyiv City": ("Kyiv", "м. Київ"),
+        "Kyivska oblast": ("Kyiv Oblast", "Київська область"),
+        "Lvivska oblast": ("Lviv Oblast", "Львівська область"),
+        "Mykolaivska oblast": ("Mykolaiv Oblast", "Миколаївська область"),
+        "Odeska oblast": ("Odessa Oblast", "Одеська область"),
+        "Poltavska oblast": ("Poltava Oblast", "Полтавська область"),
+        "Rivnenska oblast": ("Rivne Oblast", "Рівненська область"),
+        "Sumska oblast": ("Sumy Oblast", "Сумська область"),
+        "Ternopilska oblast": ("Ternopil Oblast", "Тернопільська область"),
+        "Vinnytska oblast": ("Vinnytsia Oblast", "Вінницька область"),
+        "Volynska oblast": ("Volyn Oblast", "Волинська область"),
+        "Zakarpatska oblast": ("Zakarpattia Oblast", "Закарпатська область"),
+        "Zaporizka oblast": ("Zaporizhia Oblast", "Запорізька область"),
+        "Zhytomyrska oblast": ("Zhytomyr Oblast", "Житомирська область"),
+    }
+    # Under a permanent alert since 2022 (Luhansk has only pre-April-2022 rows in the dataset): no model.
+    PERMANENT = {"Luhansk Oblast": "Luhanska oblast", "Autonomous Republic of Crimea": "Crimea", "Sevastopol": "Sevastopol"}
+    
+    # Short display labels, e.g. "Cherkasy", "Kyiv obl."
+    LABELS = {r: shape.replace(" Oblast", "") for r, (shape, _) in REGIONS.items()}
+    LABELS.update({"Kyiv City": "Kyiv City", "Kyivska oblast": "Kyiv obl."})
+    
+    UBILLING_TO_REGION = {uk: r for r, (_, uk) in REGIONS.items()}
+    """One-off: derive oblast adjacency from the map polygons -> training/neighbors.json.
+    
+    Adjacent oblasts share boundary vertices in the geoBoundaries file (distance 0), so the threshold is
+    only a tolerance; the result is identical for 0.005-0.05 degrees.
+    Usage: uv run python -m training.build_neighbors
+    """
+    import json
+    from pathlib import Path
+    
+    import numpy as np
+    
+    from training.data import ROOT
+    
+    GEOJSON = ROOT / "app" / "static" / "oblasts.geojson"
+    OUT = Path(__file__).resolve().parent / "neighbors.json"
+    THRESHOLD_DEG = 0.01
+    
+    
+    def vertices(geom: dict) -> np.ndarray:
+        polys = geom["coordinates"] if geom["type"] == "MultiPolygon" else [geom["coordinates"]]
+        return np.array([p for poly in polys for ring in poly for p in ring])
+    
+    
+    def min_dist(a: np.ndarray, b: np.ndarray) -> float:
+        return min(np.sqrt(((a[i:i + 500, None] - b[None]) ** 2).sum(-1)).min() for i in range(0, len(a), 500))
+    {'region': 'Khersonska oblast', 'permanent': False}
+[tool call: Bash]
+    SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad; cat > $SP/weather_ablation.py <<'EOF'
+    """Scratch check: does weather at the oblast centroid help the start model on VALIDATION? (test untouched)"""
+    import json, sys, urllib.request
+    from pathlib import Path
+    import numpy as np, pandas as pd
+    from training import start_model
+    from training.data import ROOT, TRAIN_START, load_alerts, regions
+    from training.features import START_FEATURES
+    from training.train import split_times, start_feature_frame
+    from training.build_neighbors import vertices
+    
+    CACHE = Path(sys.argv[1]) / "weather.parquet"
+    VARS = ["cloud_cover", "precipitation", "wind_speed_10m", "visibility", "temperature_2m"]
+    
+    def fetch(regs, end):
+        if CACHE.exists():
+            return pd.read_parquet(CACHE)
+        g = json.loads((ROOT / "app/static/oblasts.geojson").read_text())
+        cent = {f["properties"]["region"]: vertices(f["geometry"]).mean(0) for f in g["features"]}
+        lat = ",".join(f"{cent[r][1]:.3f}" for r in regs); lon = ",".join(f"{cent[r][0]:.3f}" for r in regs)
+        url = ("https://historical-forecast-api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon +
+               f"&start_date={TRAIN_START:%Y-%m-%d}&end_date={end:%Y-%m-%d}&hourly={','.join(VARS)}&timezone=UTC")
+        data = json.loads(urllib.request.urlopen(url, timeout=120).read())
+        frames = [pd.DataFrame(d["hourly"]).assign(region=r) for r, d in zip(regs, data)]
+        df = pd.concat(frames); df["t"] = pd.to_datetime(df.time, utc=True); df = df.drop(columns="time")
+        df.to_parquet(CACHE); return df
+    
+    alerts = load_alerts(); regs = regions(alerts)
+    valid_start, test_start, grid_end = split_times(alerts)
+    feats, y = start_feature_frame(alerts, regs, grid_end)
+    wx = fetch(list(regs), grid_end).rename(columns={v: "wx_" + v for v in VARS})
+    print("weather rows", len(wx), "missing frac", wx.filter(like="wx_").isna().mean().round(4).to_dict())
+    f2 = feats.assign(region_s=feats.region.astype(str)).merge(wx.rename(columns={"region": "region_s"}), on=["region_s", "t"], how="left")
+    assert len(f2) == len(feats); f2.index = feats.index
+    calm = (f2.active_now == 0).to_numpy()
+    tr = (f2.t < valid_start).to_numpy() & calm
+    va = ((f2.t >= valid_start) & (f2.t < test_start)).to_numpy() & calm
+    WX = [c for c in f2 if c.startswith("wx_")]
+    variants = {"current": START_FEATURES, "+weather": START_FEATURES + WX,
+                "+cloud,wind,precip": START_FEATURES + ["wx_cloud_cover", "wx_wind_speed_10m", "wx_precipitation"],
+                "weather only (+time,region)": ["region", "hour_kyiv", "dow_kyiv"] + WX,
+                "time,region only": ["region", "hour_kyiv", "dow_kyiv"]}
+    print(f"{'variant':30s} {'rounds':>6s} {'logloss':>8s} {'brier':>7s} {'auc':>6s} {'pr_auc':>6s}")
+    for name, fs in variants.items():
+        b, _ = start_model.fit_with_validation(f2[tr], y[tr], f2[va], y[va], features=fs)
+        m = start_model.metrics(y[va], start_model.predict(b, f2[va]), "v")
+        print(f"{name:30s} {b.best_iteration:6d} {m['v_logloss']:8.4f} {m['v_brier']:7.4f} {m['v_roc_auc']:6.4f} {m['v_pr_auc']:6.4f}")
+        if name == "+weather":
+            imp = dict(zip(b.feature_name(), b.feature_importance("gain"))); tot = sum(imp.values())
+            print("   gain share:", {k: round(v / tot, 3) for k, v in sorted(imp.items(), key=lambda kv: -kv[1])})
+    EOF
+    cd /home/vumenira/projects/Air_raid_alert_analysis && time PYTHONPATH=. uv run python $SP/weather_ablation.py $SP 2>&1 | grep -v Warning
+[tool error]
+    Exit code 137
+
+==== CLAUDE (2026-10-12 16:19:19 UTC) ====
+No response requested.
+
+==== USER  (2026-10-12 16:20:44 UTC) ====
+It seems that you've been interrupted by a crash of my system. You can continue the work. And you're right, we use lightgbm, I just confused myself with those names.
+
+==== CLAUDE (2026-10-12 16:20:49 UTC) ====
+Picking up where it stopped. One note first: my last command (the weather ablation) exited with **137 (SIGKILL)**, which usually means the OOM killer. So my script may have caused or contributed to your system crash. I'll check memory and the state of things before I run anything heavy again.
+[tool call: Bash]
+    SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad; free -h; nproc; ls -la $SP 2>&1; journalctl -k --since "-3h" 2>/dev/null | grep -i -E "oom|killed process" | tail -5; cd /home/vumenira/projects/Air_raid_alert_analysis && git status --short | head; grep -c "renderModelView" app/static/app.js
+[tool output]
+                   total        used        free      shared  buff/cache   available
+    Mem:           7,6Gi       3,0Gi       3,1Gi       266Mi       2,1Gi       4,6Gi
+    Swap:          2,0Gi          0B       2,0Gi
+    8
+    total 8
+    drwx------ 2 vumenira vumenira 4096 Oct 12 19:19 .
+    drwx------ 3 vumenira vumenira 4096 Oct 12 19:19 ..
+    ?? .gitignore
+    ?? CLAUDE.md
+    ?? README.md
+    ?? app/
+    ?? exploration/
+    ?? history-1-setup-and-mvp.txt
+    ?? models/
+    ?? pyproject.toml
+    ?? tests/
+    ?? training/
+    0
+[tool call: Bash]
+    systemd-run --user --scope -q -p MemoryMax=3G -p MemorySwapMax=0 /usr/bin/time -v env PYTHONPATH=. uv run python -c "
+    from training.data import load_alerts, regions
+    from training.train import split_times, start_feature_frame
+    a=load_alerts(); r=regions(a); v,t,g=split_times(a); f,y=start_feature_frame(a,r,g)
+    print(f.shape, round(f.memory_usage(deep=True).sum()/1e6), 'MB', v, t, g)
+    " 2>&1 | grep -E "^\(|Maximum resident|Exit status|Elapsed"
+[tool output]
+    (216672, 16) 24 MB 2026-08-31 03:00:00+00:00 2026-09-14 03:00:00+00:00 2026-10-12 03:00:00+00:00
+    	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:02.36
+    	Maximum resident set size (kbytes): 262124
+    	Exit status: 0
+[tool call: Bash]
+    SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad; mkdir -p $SP; cat > $SP/weather_ablation.py <<'EOF'
+    """Scratch check: does weather at the oblast centroid help the start model on VALIDATION? (test untouched)"""
+    import json, sys, urllib.request
+    from pathlib import Path
+    import pandas as pd
+    from training import start_model
+    from training.data import ROOT, TRAIN_START, load_alerts, regions
+    from training.features import START_FEATURES
+    from training.train import split_times, start_feature_frame
+    from training.build_neighbors import vertices
+    
+    CACHE = Path(sys.argv[1]) / "weather.parquet"
+    VARS = ["cloud_cover", "precipitation", "wind_speed_10m", "visibility", "temperature_2m"]
+    
+    def fetch(regs, end):
+        if CACHE.exists():
+            return pd.read_parquet(CACHE)
+        g = json.loads((ROOT / "app/static/oblasts.geojson").read_text())
+        cent = {f["properties"]["region"]: vertices(f["geometry"]).mean(0) for f in g["features"]}
+        lat = ",".join(f"{cent[r][1]:.3f}" for r in regs); lon = ",".join(f"{cent[r][0]:.3f}" for r in regs)
+        url = ("https://historical-forecast-api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon +
+               f"&start_date={TRAIN_START:%Y-%m-%d}&end_date={end:%Y-%m-%d}&hourly={','.join(VARS)}&timezone=UTC")
+        data = json.loads(urllib.request.urlopen(url, timeout=120).read())
+        df = pd.concat([pd.DataFrame(d["hourly"]).assign(region=r) for r, d in zip(regs, data)])
+        df["t"] = pd.to_datetime(df.time, utc=True); df = df.drop(columns="time")
+        df.to_parquet(CACHE); return df
+    
+    alerts = load_alerts(); regs = [str(r) for r in regions(alerts)]
+    valid_start, test_start, grid_end = split_times(alerts)
+    feats, y = start_feature_frame(alerts, regions(alerts), grid_end)
+    wx = fetch(regs, grid_end).rename(columns={v: "wx_" + v for v in VARS})
+    print("weather rows", len(wx), "missing", wx.filter(like="wx_").isna().mean().round(4).to_dict())
+    key = pd.MultiIndex.from_arrays([feats.region.astype(str), feats.t])
+    wxi = wx.set_index(["region", "t"]).reindex(key)
+    f2 = feats.copy()
+    for c in wxi: f2[c] = wxi[c].to_numpy()
+    calm = (f2.active_now == 0).to_numpy()
+    tr = (f2.t < valid_start).to_numpy() & calm
+    va = ((f2.t >= valid_start) & (f2.t < test_start)).to_numpy() & calm
+    WX = [c for c in f2 if c.startswith("wx_")]
+    print("unmatched weather rows in grid:", f2[WX[0]].isna().mean().round(4))
+    variants = {"current": START_FEATURES, "+weather(5)": START_FEATURES + WX,
+                "+cloud,wind,precip": START_FEATURES + ["wx_cloud_cover", "wx_wind_speed_10m", "wx_precipitation"],
+                "time,region only": ["region", "hour_kyiv", "dow_kyiv"],
+                "time,region+weather": ["region", "hour_kyiv", "dow_kyiv"] + WX}
+    print(f"{'variant':24s} {'rounds':>6s} {'logloss':>8s} {'brier':>7s} {'auc':>6s} {'pr_auc':>6s}")
+    for name, fs in variants.items():
+        b, _ = start_model.fit_with_validation(f2[tr], y[tr], f2[va], y[va], features=fs)
+        m = start_model.metrics(y[va], start_model.predict(b, f2[va]), "v")
+        print(f"{name:24s} {b.best_iteration:6d} {m['v_logloss']:8.4f} {m['v_brier']:7.4f} {m['v_roc_auc']:6.4f} {m['v_pr_auc']:6.4f}", flush=True)
+        if name == "+weather(5)":
+            imp = dict(zip(b.feature_name(), b.feature_importance("gain"))); tot = sum(imp.values())
+            print("   gain share:", {k: round(v / tot, 3) for k, v in sorted(imp.items(), key=lambda kv: -kv[1])})
+    EOF
+    cd /home/vumenira/projects/Air_raid_alert_analysis && systemd-run --user --scope -q -p MemoryMax=3G -p MemorySwapMax=0 /usr/bin/time -v env PYTHONPATH=. uv run python $SP/weather_ablation.py $SP 2>&1 | grep -v -i warning | grep -v -E "^\s+(User|System|Percent|Average|Major|Minor|Volun|Invol|Swaps|File|Socket|Signals|Page|Command)"
+[tool output]
+    weather rows 217152 missing {'wx_cloud_cover': 0.0, 'wx_precipitation': 0.0, 'wx_wind_speed_10m': 0.0, 'wx_visibility': 0.0, 'wx_temperature_2m': 0.0}
+    unmatched weather rows in grid: 0.0
+    variant                  rounds  logloss   brier    auc pr_auc
+    current                     124   0.4385  0.1429 0.7766 0.5128
+    +weather(5)                 109   0.4393  0.1433 0.7758 0.5117
+       gain share: {'starts_7d': np.float64(0.617), 'region': np.float64(0.184), 'hour_kyiv': np.float64(0.034), 'min_since_last_end': np.float64(0.033), 'starts_24h': np.float64(0.033), 'nb_active_frac': np.float64(0.026), 'nb_starts_1h': np.float64(0.015), 'n_active_oblasts': np.float64(0.012), 'national_starts_1h': np.float64(0.012), 'wx_temperature_2m': np.float64(0.011), 'wx_visibility': np.float64(0.009), 'dow_kyiv': np.float64(0.006), 'wx_wind_speed_10m': np.float64(0.005), 'wx_cloud_cover': np.float64(0.003), 'wx_precipitation': np.float64(0.001)}
+    +cloud,wind,precip           74   0.4390  0.1431 0.7759 0.5117
+    time,region only             44   0.4761  0.1548 0.7508 0.4680
+    time,region+weather          56   0.4645  0.1508 0.7568 0.4755
+    	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:21.74
+    	Maximum resident set size (kbytes): 446184
+    	Exit status: 0
+[tool call: Bash]
+    SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad; cat > $SP/launch_wx.py <<'EOF'
+    """Scratch check: weather at drone LAUNCH areas (national features, trailing 6h mean), validation only."""
+    import json, sys, urllib.request
+    from pathlib import Path
+    import pandas as pd
+    from training import start_model
+    from training.data import TRAIN_START, load_alerts, regions
+    from training.features import START_FEATURES
+    from training.train import split_times, start_feature_frame
+    
+    SITES = {"kursk": (51.75, 36.30), "bryansk": (53.10, 34.00), "oryol": (52.95, 36.05),
+             "primorsko": (46.05, 38.17), "crimea": (45.10, 33.90)}
+    VARS = ["cloud_cover", "precipitation", "wind_speed_10m", "wind_gusts_10m", "visibility"]
+    CACHE = Path(sys.argv[1]) / "launch_wx.parquet"
+    
+    alerts = load_alerts(); regs = regions(alerts)
+    valid_start, test_start, grid_end = split_times(alerts)
+    feats, y = start_feature_frame(alerts, regs, grid_end)
+    if not CACHE.exists():
+        url = ("https://historical-forecast-api.open-meteo.com/v1/forecast?latitude=" + ",".join(str(a) for a, _ in SITES.values()) +
+               "&longitude=" + ",".join(str(b) for _, b in SITES.values()) +
+               f"&start_date={TRAIN_START:%Y-%m-%d}&end_date={grid_end:%Y-%m-%d}&hourly={','.join(VARS)}&timezone=UTC")
+        data = json.loads(urllib.request.urlopen(url, timeout=120).read())
+        pd.concat([pd.DataFrame(d["hourly"]).assign(site=s) for s, d in zip(SITES, data)]).to_parquet(CACHE)
+    raw = pd.read_parquet(CACHE); raw["t"] = pd.to_datetime(raw.time, utc=True)
+    wide = raw.pivot(index="t", columns="site", values=VARS)
+    # Strictly past: mean over hours [t-6h, t-1h]; values are archived *forecasts* for those hours, so known before t.
+    past = wide.shift(1).rolling(6, min_periods=1).mean()
+    agg = pd.DataFrame({f"lw_{v}_mean": past[v].mean(axis=1) for v in VARS})
+    agg["lw_precip_max"] = past["precipitation"].max(axis=1); agg["lw_gust_max"] = past["wind_gusts_10m"].max(axis=1)
+    LW = list(agg)
+    f2 = feats.join(agg, on="t")
+    print("missing:", f2[LW].isna().mean().max().round(4))
+    calm = (f2.active_now == 0).to_numpy()
+    tr = (f2.t < valid_start).to_numpy() & calm
+    va = ((f2.t >= valid_start) & (f2.t < test_start)).to_numpy() & calm
+    for name, fs in {"current": START_FEATURES, "+launch weather": START_FEATURES + LW}.items():
+        b, _ = start_model.fit_with_validation(f2[tr], y[tr], f2[va], y[va], features=fs)
+        m = start_model.metrics(y[va], start_model.predict(b, f2[va]), "v")
+        print(f"{name:18s} {b.best_iteration:5d} logloss {m['v_logloss']:.4f} brier {m['v_brier']:.4f} auc {m['v_roc_auc']:.4f} pr {m['v_pr_auc']:.4f}", flush=True)
+    # Direct signal check: national starts in next 6h vs launch-area weather (daily-ish relationship)
+    nat = pd.Series(y, index=feats.index).groupby(feats.t).sum().rolling(6).sum().shift(-5)
+    d = agg.join(nat.rename("starts_next6h")).dropna()
+    print("spearman with national starts next 6h:\n", d.corr(method="spearman")["starts_next6h"].drop("starts_next6h").round(3).to_string())
+    EOF
+    cd /home/vumenira/projects/Air_raid_alert_analysis && systemd-run --user --scope -q -p MemoryMax=3G -p MemorySwapMax=0 env PYTHONPATH=. uv run python $SP/launch_wx.py $SP 2>&1 | grep -v -i warning
+[tool output]
+    missing: 0.0001
+    current              124 logloss 0.4385 brier 0.1429 auc 0.7766 pr 0.5128
+    +launch weather       82 logloss 0.4392 brier 0.1433 auc 0.7757 pr 0.5112
+    spearman with national starts next 6h:
+     lw_cloud_cover_mean      -0.276
+    lw_precipitation_mean    -0.171
+    lw_wind_speed_10m_mean   -0.007
+    lw_wind_gusts_10m_mean    0.018
+    lw_visibility_mean        0.269
+    lw_precip_max            -0.159
+    lw_gust_max               0.013
+[tool call: Bash]
+    SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad; cd /home/vumenira/projects/Air_raid_alert_analysis && ls exploration/ && for pair in "weather_ablation:03_weather_oblast" "launch_wx:04_weather_launch_sites"; do s=${pair%%:*}; d=${pair##*:}; sed -e 's/^CACHE = Path(sys.argv\[1\]) \/ "\(.*\)"/CACHE = ROOT \/ "data" \/ "\1"  # gitignored/' -e 's/^"""Scratch check: /"""/' -e 's/^import json, sys, urllib.request/import json, urllib.request/' $SP/$s.py > exploration/$d.py; done; sed -i 's/^from training.data import TRAIN_START, load_alerts, regions/from training.data import ROOT, TRAIN_START, load_alerts, regions/' exploration/04_weather_launch_sites.py; sed -i '1a\\nUsage: PYTHONPATH=. uv run python exploration/03_weather_oblast.py   (Open-Meteo historical-forecast API, no key)\nResult 2026-10-12: valid logloss 0.4385 -> 0.4393 with weather; no gain, weather not added to the model.' exploration/03_weather_oblast.py; sed -i '1a\\nUsage: PYTHONPATH=. uv run python exploration/04_weather_launch_sites.py\nResult 2026-10-12: real correlation (visibility rho=+0.27, cloud cover -0.28 vs national starts next 6h)\nbut valid logloss 0.4385 -> 0.4392 at the 1h horizon: redundant with recent-alert features.' exploration/04_weather_launch_sites.py; head -6 exploration/0[34]*.py; grep -n "CACHE =\|^import\|^from training.data" exploration/0[34]*.py; cp $SP/*.parquet data/ && systemd-run --user --scope -q -p MemoryMax=3G env PYTHONPATH=. uv run python exploration/04_weather_launch_sites.py 2>&1 | grep -v -i warn | head -3; cat training/duration_model.py; grep -n "dur\|DURATION" training/features.py | head -20
+[tool output]
+    01_data_profile.py
+    02_feature_ablation.py
+    ==> exploration/03_weather_oblast.py <==
+    """does weather at the oblast centroid help the start model on VALIDATION? (test untouched)"""
+    
+    Usage: PYTHONPATH=. uv run python exploration/03_weather_oblast.py   (Open-Meteo historical-forecast API, no key)
+    Result 2026-10-12: valid logloss 0.4385 -> 0.4393 with weather; no gain, weather not added to the model.
+    import json, urllib.request
+    from pathlib import Path
+    
+    ==> exploration/04_weather_launch_sites.py <==
+    """weather at drone LAUNCH areas (national features, trailing 6h mean), validation only."""
+    
+    Usage: PYTHONPATH=. uv run python exploration/04_weather_launch_sites.py
+    Result 2026-10-12: real correlation (visibility rho=+0.27, cloud cover -0.28 vs national starts next 6h)
+    but valid logloss 0.4385 -> 0.4392 at the 1h horizon: redundant with recent-alert features.
+    import json, urllib.request
+    exploration/04_weather_launch_sites.py:6:import json, urllib.request
+    exploration/04_weather_launch_sites.py:8:import pandas as pd
+    exploration/04_weather_launch_sites.py:10:from training.data import ROOT, TRAIN_START, load_alerts, regions
+    exploration/04_weather_launch_sites.py:17:CACHE = ROOT / "data" / "launch_wx.parquet"  # gitignored
+    exploration/03_weather_oblast.py:5:import json, urllib.request
+    exploration/03_weather_oblast.py:7:import pandas as pd
+    exploration/03_weather_oblast.py:9:from training.data import ROOT, TRAIN_START, load_alerts, regions
+    exploration/03_weather_oblast.py:14:CACHE = ROOT / "data" / "weather.parquet"  # gitignored
+      File "/home/vumenira/projects/Air_raid_alert_analysis/exploration/04_weather_launch_sites.py", line 3
+        Usage: PYTHONPATH=. uv run python exploration/04_weather_launch_sites.py
+                                                        ^
+    """Model 2: distribution of alert duration (log-normal accelerated failure time model).
+    
+    log(duration) ~ Normal(mu(x), sigma), so S(t) = 1 - Phi((ln t - mu) / sigma).
+    The fitted coefficients are exported to JSON; prediction below needs only numpy/scipy.
+    """
+    import json
+    from pathlib import Path
+    
+    import numpy as np
+    import pandas as pd
+    from lifelines import LogLogisticAFTFitter, LogNormalAFTFitter, WeibullAFTFitter
+    from lifelines.utils import concordance_index
+    from scipy.stats import norm
+    
+    NUMERIC = ["hour_sin", "hour_cos", "n_active_oblasts", "log_prev_duration"]
+    
+    
+    def design_matrix(feats: pd.DataFrame, regions: list[str]) -> pd.DataFrame:
+        X = pd.DataFrame(index=feats.index)
+        for r in regions[1:]:  # first region is the reference level
+            X[f"region={r}"] = (feats.region == r).astype(float)
+        X["hour_sin"], X["hour_cos"] = feats.hour_sin, feats.hour_cos
+        X["n_active_oblasts"] = feats.n_active_oblasts.astype(float)
+        X["log_prev_duration"] = np.log1p(feats.prev_duration_min)
+        return X
+    
+    
+    def fit(feats: pd.DataFrame, durations: pd.Series, regions: list[str]) -> tuple[dict, LogNormalAFTFitter]:
+        X = design_matrix(feats, regions)
+        df = X.assign(duration=durations.clip(lower=0.5).to_numpy())
+        aft = LogNormalAFTFitter(penalizer=0.01).fit(df, duration_col="duration")
+        mu = aft.params_.loc["mu_"]
+        params = {
+            "regions": regions,
+            "mu_intercept": float(mu["Intercept"]),
+            "mu_coef": {c: float(mu[c]) for c in X.columns},
+            "log_sigma": float(aft.params_.loc[("sigma_", "Intercept")]),
+        }
+        return params, aft
+    
+    
+    FAMILIES = {"lognormal": LogNormalAFTFitter, "weibull": WeibullAFTFitter, "loglogistic": LogLogisticAFTFitter}
+    
+    
+    def compare_families(f_tr: pd.DataFrame, d_tr: pd.Series, f_va: pd.DataFrame, d_va: pd.Series,
+                         regions: list[str]) -> dict[str, float]:
+        """Mean validation log-likelihood (per alert, minutes scale) of each AFT distribution family."""
+        # every alert here has an observed end (event = 1); score() needs the column explicitly
+        tr = design_matrix(f_tr, regions).assign(duration=d_tr.clip(lower=0.5).to_numpy(), event=1)
+        va = design_matrix(f_va, regions).assign(duration=d_va.clip(lower=0.5).to_numpy(), event=1)
+        out = {}
+        for name, cls in FAMILIES.items():
+            m = cls(penalizer=0.01).fit(tr, duration_col="duration", event_col="event")
+            out[name] = float(m.score(va, scoring_method="log_likelihood"))
+        return out
+    
+    
+    def predict_mu_sigma(params: dict, feats: pd.DataFrame) -> tuple[np.ndarray, float]:
+        X = design_matrix(feats, params["regions"])
+        coef = pd.Series(params["mu_coef"])
+        mu = params["mu_intercept"] + X[coef.index].to_numpy() @ coef.to_numpy()
+        return mu, float(np.exp(params["log_sigma"]))
+    
+    
+    def quantile(mu, sigma, q, elapsed=0.0):
+        """Duration quantile, optionally conditional on the alert having lasted ``elapsed`` minutes."""
+        elapsed = np.asarray(elapsed, dtype=float)
+        s_e = np.where(elapsed > 0, norm.sf((np.log(np.maximum(elapsed, 1e-9)) - mu) / sigma), 1.0)
+        return np.exp(mu + sigma * norm.ppf(1 - (1 - q) * s_e))
+    
+    
+    def survival_curve(mu: float, sigma: float, grid_min: np.ndarray, elapsed: float = 0.0) -> np.ndarray:
+        s = norm.sf((np.log(grid_min) - mu) / sigma)
+        if elapsed > 0:
+            s = np.minimum(s / norm.sf((np.log(elapsed) - mu) / sigma), 1.0)
+            s[grid_min < elapsed] = 1.0
+        return s
+    
+    
+    def evaluate(params: dict, feats: pd.DataFrame, durations: pd.Series, baseline_median: pd.Series) -> dict:
+        mu, sigma = predict_mu_sigma(params, feats)
+        med = np.exp(mu)
+        lo, hi = quantile(mu, sigma, 0.1), quantile(mu, sigma, 0.9)
+        y = durations.to_numpy()
+        base = feats.region.map(baseline_median).to_numpy()
+        return {
+            "dur_mae_median_min": float(np.mean(np.abs(med - y))),
+            "dur_mae_baseline_min": float(np.mean(np.abs(base - y))),
+            "dur_medae_min": float(np.median(np.abs(med - y))),
+            "dur_coverage_80": float(np.mean((y >= lo) & (y <= hi))),
+            "dur_c_index": float(concordance_index(y, med)),
+            # log-density of the duration in minutes (log-normal: density of log y, minus log y)
+            "dur_mean_log_lik": float(np.mean(norm.logpdf(np.log(np.maximum(y, 0.5)), mu, sigma) - np.log(np.maximum(y, 0.5)))),
+            "sigma": sigma,
+        }
+    
+    
+    def save(params: dict, path: Path) -> None:
+        path.write_text(json.dumps(params, indent=1, ensure_ascii=False))
+    
+    
+    def load(path: Path) -> dict:
+        return json.loads(path.read_text())
+    24:DURATION_FEATURES = ["region", "hour_sin", "hour_cos", "n_active_oblasts", "prev_duration_min"]
+    106:def duration_features(alerts: pd.DataFrame, events: pd.DataFrame, regions: list[str]) -> pd.DataFrame:
+    115:        s, dur = _ns(a.started_at), a.duration_min.to_numpy()
+    118:        prev[idx[ok]] = dur[i[ok]]
+    127:        "prev_duration_min": np.nan_to_num(prev, nan=20.0),
+
+==== CLAUDE (2026-10-12 16:22:41 UTC) ====
+My docstring insert landed after the closing `"""`, which broke the syntax. Fixing:
+[tool call: Bash]
+    python3 - <<'EOF'
+    from pathlib import Path
+    for f in ["exploration/03_weather_oblast.py", "exploration/04_weather_launch_sites.py"]:
+        p = Path(f); lines = p.read_text().split("\n")
+        i = next(k for k, l in enumerate(lines) if l.startswith("import json"))
+        first = lines[0].removeprefix('"""').removesuffix('"""')
+        first = first[0].upper() + first[1:]
+        body = [l for l in lines[1:i] if l.strip()]
+        p.write_text("\n".join(['"""' + first, "", *body, '"""', *lines[i:]]))
+    EOF
+    head -8 exploration/04_weather_launch_sites.py; for f in 03_weather_oblast 04_weather_launch_sites; do systemd-run --user --scope -q -p MemoryMax=3G env PYTHONPATH=. uv run python exploration/$f.py 2>&1 | grep -v -i warn | grep -E "current|weather|Error" | head -3; done
+[tool output]
+    """Weather at drone LAUNCH areas (national features, trailing 6h mean), validation only.
+    
+    Usage: PYTHONPATH=. uv run python exploration/04_weather_launch_sites.py
+    Result 2026-10-12: real correlation (visibility rho=+0.27, cloud cover -0.28 vs national starts next 6h)
+    but valid logloss 0.4385 -> 0.4392 at the 1h horizon: redundant with recent-alert features.
+    """
+    import json, urllib.request
+    from pathlib import Path
+    weather rows 217152 missing {'wx_cloud_cover': 0.0, 'wx_precipitation': 0.0, 'wx_wind_speed_10m': 0.0, 'wx_visibility': 0.0, 'wx_temperature_2m': 0.0}
+    unmatched weather rows in grid: 0.0
+    current                     124   0.4385  0.1429 0.7766 0.5128
+    current              124 logloss 0.4385 brier 0.1429 auc 0.7766 pr 0.5128
+    +launch weather       82 logloss 0.4392 brier 0.1433 auc 0.7757 pr 0.5112
+
+==== CLAUDE (2026-10-12 16:23:06 UTC) ====
+Both experiments reproduce exactly. I'll add a note to CLAUDE.md so future sessions don't retry this:
+[tool call: Bash]
+    python3 - <<'EOF'
+    from pathlib import Path
+    p = Path("CLAUDE.md"); s = p.read_text()
+    anchor = "- **Model 2** (`duration_model.py`)"
+    note = ("- Weather was tested and rejected for the start model (validation only, 2026-10-12): Open-Meteo *historical-forecast* API "
+            "(no key, leakage-safe because it stores archived forecasts) at oblast centroids (`exploration/03_weather_oblast.py`) and at drone launch "
+            "areas (`exploration/04_weather_launch_sites.py`). Launch-area visibility/cloud correlate with national activity (|ρ|≈0.27), "
+            "but log loss doesn't improve at the 1 h horizon. Revisit only for longer horizons (6–24 h).\n")
+    s = s.replace(anchor, note + anchor, 1); p.write_text(s)
+    EOF
+    grep -n "Weather was" CLAUDE.md | cut -c1-80
+[tool output]
+    35:- Weather was tested and rejected for the start model (validation only, 2026-
+
+==== CLAUDE (2026-10-12 16:23:31 UTC) ====
+I removed the Model tab, and I tested weather on real data: it doesn't make the model better, so I didn't add it. Your questions are answered below.
+
+## 1. UI: Model tab removed
+- I removed the button from `app/static/index.html`, and from `app/static/app.js` the code that drew it (`renderModelView`, the calibration chart, the training-curve chart and the feature-name table).
+- `/api/meta` in `app/server.py` no longer sends metrics, calibration, importance or curves, and the server no longer loads `metrics.json`. `train.py` still writes that file, and the metrics still go to W&B.
+- **Checks:** `pytest` passes (4 tests), and the endpoints and the page work with only Today and Last 7 days. `node` isn't installed, so I couldn't run a JS syntax check. I read the edited spots instead, but please open the dashboard once to confirm.
+
+## 2. Weather as a feature
+Getting the data is easy. The Open-Meteo **historical-forecast** API needs no key and has full hourly data from Oct 2025. It stores the forecasts as they were issued, so the model only uses weather that was known before time t. That keeps it leakage-safe.
+
+I scored two versions on the validation window only (the test period wasn't touched):
+
+| Variant | Log loss ↓ | ROC-AUC ↑ | PR-AUC ↑ |
+|---|---|---|---|
+| Current model | **0.4385** | **0.7766** | **0.5128** |
+| + weather at each oblast's centre | 0.4393 | 0.7758 | 0.5117 |
+| + weather at drone launch areas (Kursk, Bryansk, Oryol, Primorsko-Akhtarsk, Crimea), average of last 6 h | 0.4392 | 0.7757 | 0.5112 |
+
+Weather is linked to attacks: clearer skies at the launch areas go with more alerts in the next 6 hours (correlation about 0.27). But the model doesn't improve, because at a 1-hour horizon the drones are usually already flying. The features "alerts started in the last hour" and "neighbours on alert" pick that up more directly than the weather does.
+
+So I didn't add weather to the model. Both experiments are saved as `exploration/03_weather_oblast.py` and `04_weather_launch_sites.py`, and I added a note to CLAUDE.md. Weather might help a longer forecast, such as "chance of an alert tonight" (6–24 h ahead).
+
+## 3. The duration model (`training/duration_model.py`)
+- **Approach:** it's a log-normal survival model (lifelines' log-normal AFT). It treats the log of the alert's duration as a normal distribution. The centre of that distribution depends on the oblast, the hour of day, how many oblasts are on alert, and how long the previous alert in that oblast lasted. The spread is the same for every alert.
+- **Why it suits the task:** it predicts a full range of durations, not just one number. The dashboard shows the median and a 10–90% range, and updates the estimate as the alert goes on. For example, "it has lasted 40 min, so the median end is now X". All of this is a few lines of numpy/scipy, and training takes seconds.
+- **Test results:** the error of the median is 19.3 min, against 19.5 min for the per-oblast median, so it's barely better as a single number. The 80% range contains the real duration 81% of the time, which is the useful part.
+- **Weaknesses:**
+  - The spread is the same for every alert, but a lone-drone alert and a massive missile attack really do differ in how uncertain they are.
+  - A Weibull distribution fit the validation data slightly better, but the prediction code only supports log-normal.
+  - In Now mode the live feed doesn't give the alert's start time, so the forecast can't account for how long the alert has already lasted.
+
+## 4. LSTM vs. what you have (LightGBM)
+**What an LSTM would add:** it learns patterns over time from raw sequences without hand-made features. It can also model all oblasts together and capture how attack waves build up.
+
+**Why it's a poor fit here:**
+- **Too little data:** the data has about 9k hours × 24 oblasts, and positive hours are rare. Neural networks overfit on that much, while gradient-boosted trees do well.
+- **Compute:** an LSTM is slow to train on a 4-core CPU, needs tuning, and gives different results from run to run. LightGBM trains in about 20 s.
+- **Leakage risk:** your current features have tests proving they only use data available at time t. Sequence windows are much easier to get wrong.
+- **Recent evidence:** on tabular and event-count data like this, boosted trees with lag features usually match or beat RNNs, as in the M5 competition.
+
+**Alternatives worth considering (all cheap):**
+1. **Keep LightGBM** and keep improving features. You're already doing this, and it's the right default.
+2. **Hawkes process (self-exciting point process):** each alert raises the chance of more alerts nearby soon after, and that effect fades over time. This matches how attack waves move between oblasts, and it has very few parameters. It works well as an interpretable baseline or as an extra feature.
+3. **Logistic regression on the same features:** it's a sanity check. If it gets close to LightGBM, the features matter more than the model.
+4. **Pretrained time-series models (Chronos, TimesFM):** they need no training, but they forecast counts rather than event probabilities, and they're heavier to run on a CPU. Only worth a quick comparison.
+
+If you want something more for the start model, a Hawkes baseline makes a good comparison point: about an hour of work, and it trains in seconds.
+
+Nothing is committed yet. I also wrote a ~2 KB weather cache to `data/`, which is gitignored.
+
+==== USER  (2026-10-12 16:59:39 UTC) ====
+Ok let's play with features, can you list the features that we use right now (don't write anything else)
+[tool call: Bash]
+    sed -n 1,40p training/features.py
+[tool output]
+    """Leakage-safe features. Every feature at time ``t`` uses only alerts that started before ``t``
+    and end times that were already in the past at ``t`` (an ongoing alert is known to be active,
+    but not when it will end)."""
+    import json
+    from pathlib import Path
+    
+    import numpy as np
+    import pandas as pd
+    
+    from training.data import KYIV_TZ
+    
+    # oblast adjacency derived from the map polygons (training/build_neighbors.py)
+    NEIGHBORS: dict[str, list[str]] = json.loads((Path(__file__).resolve().parent / "neighbors.json").read_text())
+    
+    HOUR = np.int64(3600 * 10**9)
+    MAX_GAP_MIN = 7 * 24 * 60  # cap for "minutes since last alert ended"
+    
+    # active_now is computed but not a model input: the start model is only used when the oblast is calm.
+    START_FEATURES = [
+        "region", "hour_kyiv", "dow_kyiv", "min_since_last_end",
+        "starts_24h", "starts_7d", "n_active_oblasts", "national_starts_1h",
+        "nb_active_frac", "nb_starts_1h",
+    ]
+    DURATION_FEATURES = ["region", "hour_sin", "hour_cos", "n_active_oblasts", "prev_duration_min"]
+    
+    
+    def _ns(ts) -> np.ndarray:
+        return pd.DatetimeIndex(ts).as_unit("ns").asi8
+    
+    
+    def _intervals(alerts: pd.DataFrame, region: str) -> tuple[np.ndarray, np.ndarray]:
+        a = alerts[alerts.region == region].sort_values("started_at")
+        starts = _ns(a.started_at)
+        ends = np.where(a.finished_at.isna(), np.iinfo(np.int64).max, _ns(a.finished_at.fillna(a.started_at)))
+        return starts, ends
+    
+    
+    def _active_at(starts, ends, t) -> np.ndarray:
+        if len(starts) == 0:
+            return np.zeros(len(t), dtype=bool)
+
+==== CLAUDE (2026-10-12 16:59:46 UTC) ====
+**Start model** (`START_FEATURES`)
+1. `region`: oblast (categorical)
+2. `hour_kyiv`: hour of day, Kyiv time
+3. `dow_kyiv`: day of week, Kyiv time
+4. `min_since_last_end`: minutes since the oblast's last alert ended (capped at 7 days)
+5. `starts_24h`: alerts started in the oblast in the last 24 h
+6. `starts_7d`: alerts started in the oblast in the last 7 days
+7. `n_active_oblasts`: oblasts on alert right now
+8. `national_starts_1h`: alerts started nationwide in the last hour
+9. `nb_active_frac`: share of neighbouring oblasts on alert right now
+10. `nb_starts_1h`: alerts started in neighbouring oblasts in the last hour
+
+**Duration model** (`DURATION_FEATURES`)
+1. `region`: oblast
+2. `hour_sin`, `hour_cos`: hour of day (cyclical)
+3. `n_active_oblasts`: oblasts on alert when the alert started
+4. `prev_duration_min`: duration of the oblast's previous alert, log-transformed in the model
+
+==== USER  (2026-10-12 17:05:34 UTC) ====
+Ok I have a couple of ideas, can you try them:
+let's count n_active_oblasts at 5 minutes after the alers starts, because sometimes they do not start simontaniuosly
+We can add nb_active_frac for second model too, as well as other features
+we can add previous allert duration
+That's it from me try a couple of new features that may be good for our models and test weather they trythly are or not.
+Implement the most usefull ones in the main pipeline
+[tool call: Bash]
+    sed -n 40,140p training/features.py && sed -n 60,170p training/train.py && cat training/data.py && ls tests && sed -n 1,200p tests/test_no_leakage.py
+[tool output]
+            return np.zeros(len(t), dtype=bool)
+        i = np.searchsorted(starts, t, side="left") - 1  # last alert that started strictly before t
+        return (i >= 0) & (ends[np.maximum(i, 0)] > t)
+    
+    
+    def _count_between(starts, lo, hi) -> np.ndarray:
+        return np.searchsorted(starts, hi, side="left") - np.searchsorted(starts, lo, side="left")
+    
+    
+    def hourly_grid(start: pd.Timestamp, end: pd.Timestamp) -> pd.DatetimeIndex:
+        return pd.date_range(start.ceil("h"), end.floor("h"), freq="h", tz="UTC")
+    
+    
+    def start_features(alerts: pd.DataFrame, times: pd.DatetimeIndex, regions: list[str]) -> pd.DataFrame:
+        """One row per (region, t) with the features known at t."""
+        t = _ns(times)
+        per_region = {r: _intervals(alerts, r) for r in regions}
+        active = {r: _active_at(s, e, t).astype(int) for r, (s, e) in per_region.items()}
+        starts_1h = {r: _count_between(s, t - HOUR, t) for r, (s, _) in per_region.items()}
+        n_active = sum(active.values())
+        all_starts = np.sort(_ns(alerts.started_at))
+        national_1h = _count_between(all_starts, t - HOUR, t)
+        local = times.tz_convert(KYIV_TZ)
+        hour, dow = local.hour.to_numpy(), local.dayofweek.to_numpy()
+    
+        frames = []
+        for r, (s, e) in per_region.items():
+            # ends of alerts that are already over at t (ongoing ones have end = int64 max)
+            finished_ends = np.sort(e[e != np.iinfo(np.int64).max])
+            j = np.searchsorted(finished_ends, t, side="right") - 1
+            last_end = finished_ends[np.maximum(j, 0)] if len(finished_ends) else np.zeros(len(t), dtype=np.int64)
+            gap = np.where(j >= 0, (t - last_end) / 6e10, MAX_GAP_MIN)
+            nbs = [n for n in NEIGHBORS.get(r, []) if n in per_region]  # modelled neighbours only
+            frames.append(pd.DataFrame({
+                "t": times,
+                "region": r,
+                "hour_kyiv": hour,
+                "dow_kyiv": dow,
+                "hour_sin": np.sin(2 * np.pi * hour / 24),
+                "hour_cos": np.cos(2 * np.pi * hour / 24),
+                "dow_sin": np.sin(2 * np.pi * dow / 7),
+                "dow_cos": np.cos(2 * np.pi * dow / 7),
+                "active_now": active[r],
+                "min_since_last_end": np.minimum(gap, MAX_GAP_MIN),
+                "starts_24h": _count_between(s, t - 24 * HOUR, t),
+                "starts_7d": _count_between(s, t - 7 * 24 * HOUR, t),
+                "n_active_oblasts": n_active,
+                "national_starts_1h": national_1h,
+                "nb_active_frac": sum(active[n] for n in nbs) / max(len(nbs), 1),
+                "nb_starts_1h": sum(starts_1h[n] for n in nbs) if nbs else np.zeros(len(t), dtype=int),
+            }))
+        out = pd.concat(frames, ignore_index=True)
+        out["region"] = pd.Categorical(out.region, categories=regions)
+        return out
+    
+    
+    def start_labels(alerts: pd.DataFrame, feats: pd.DataFrame) -> np.ndarray:
+        """1 if an alert starts in [t, t + 1h) in that region."""
+        y = np.zeros(len(feats), dtype=int)
+        for r, idx in feats.groupby("region", observed=True).indices.items():
+            s, _ = _intervals(alerts, r)
+            t = _ns(feats.t.iloc[idx])
+            y[idx] = (_count_between(s, t, t + HOUR) > 0).astype(int)
+        return y
+    
+    
+    def duration_features(alerts: pd.DataFrame, events: pd.DataFrame, regions: list[str]) -> pd.DataFrame:
+        """Features for alerts in ``events`` (columns region, started_at), known at their start time."""
+        t = _ns(events.started_at)
+        per_region = {r: _intervals(alerts, r) for r in regions}
+        n_active = sum(_active_at(s, e, t).astype(int) for s, e in per_region.values())
+    
+        prev = np.full(len(events), np.nan)
+        for r, idx in events.groupby("region").indices.items():
+            a = alerts[alerts.region == r].sort_values("started_at")
+            s, dur = _ns(a.started_at), a.duration_min.to_numpy()
+            i = np.searchsorted(s, t[idx], side="left") - 1  # previous alert, started strictly before
+            ok = i >= 0
+            prev[idx[ok]] = dur[i[ok]]
+    
+        hour = events.started_at.dt.tz_convert(KYIV_TZ).dt.hour.to_numpy()
+        out = pd.DataFrame({
+            "region": events.region.to_numpy(),
+            "hour_sin": np.sin(2 * np.pi * hour / 24),
+            "hour_cos": np.cos(2 * np.pi * hour / 24),
+            "n_active_oblasts": n_active,
+            # median-ish fill when there's no previous (or it's still unknown)
+            "prev_duration_min": np.nan_to_num(prev, nan=20.0),
+        }, index=events.index)
+        return out
+        print(f"data until {alerts.finished_at.max()}\n  train {TRAIN_START} -> {valid_start}"
+              f"\n  valid -> {test_start}\n  test  -> {grid_end}")
+        MODELS_DIR.mkdir(exist_ok=True)
+    
+        run = init_wandb(not args.no_wandb, {
+            "train_start": str(TRAIN_START), "valid_start": str(valid_start), "test_start": str(test_start),
+            "test_end": str(grid_end), "valid_days": VALID_DAYS, "test_days": TEST_DAYS, "n_regions": len(regs),
+            "start_params": start_model.PARAMS, "start_max_rounds": start_model.MAX_ROUNDS,
+            "start_early_stopping": start_model.EARLY_STOPPING, "start_features": START_FEATURES,
+        })
+    
+        # ---- Model 1: alert start within the next hour (calm oblast-hours only) ----
+        t0 = time.time()
+        feats, y = start_feature_frame(alerts, regs, grid_end)
+        calm = (feats.active_now == 0).to_numpy()
+        t = feats.t
+        tr = ((t < valid_start).to_numpy()) & calm
+        va = ((t >= valid_start) & (t < test_start)).to_numpy() & calm
+        pre = ((t < test_start).to_numpy()) & calm
+        te = ((t >= test_start).to_numpy()) & calm
+    
+        booster, curves = start_model.fit_with_validation(feats[tr], y[tr], feats[va], y[va])
+        best_rounds = booster.best_iteration
+        p_va = start_model.predict(booster, feats[va])
+        model = start_model.fit(feats[pre], y[pre], best_rounds)  # refit on train+valid
+        p = start_model.predict(model, feats[te])
+        table = start_model.baseline_table(feats[pre], y[pre])
+        p_base = start_model.baseline_predict(table, feats[te])
+        m1 = {**start_model.metrics(y[te], p, "start"), **start_model.metrics(y[te], p_base, "start_baseline"),
+              **start_model.metrics(y[va], p_va, "start_valid"),
+              "start_best_rounds": best_rounds, "start_train_rows": int(pre.sum()), "start_test_rows": int(te.sum()),
+              "start_test_pos_rate": float(y[te].mean()), "start_fit_seconds": time.time() - t0}
+        calib = start_model.calibration(y[te], p)
+        start_model.save(model, MODELS_DIR / "start_model.txt")
+    
+        # ---- Model 2: alert duration distribution ----
+        t0 = time.time()
+        clean = alerts[~alerts.naive & alerts.finished_at.notna()]
+        ev_tr = clean[(clean.started_at >= TRAIN_START) & (clean.finished_at < valid_start)]
+        ev_va = clean[(clean.started_at >= valid_start) & (clean.finished_at < test_start)]
+        ev_pre = clean[(clean.started_at >= TRAIN_START) & (clean.finished_at < test_start)]
+        ev_te = clean[(clean.started_at >= test_start) & (clean.started_at <= grid_end)]
+        families = duration_model.compare_families(
+            duration_features(alerts, ev_tr, regs), ev_tr.duration_min,
+            duration_features(alerts, ev_va, regs), ev_va.duration_min, regs)
+        best_family = max(families, key=families.get)
+        if best_family != "lognormal":
+            print(f"  NOTE: {best_family} beats lognormal on validation {families} - prediction code is lognormal-only")
+        params, aft = duration_model.fit(duration_features(alerts, ev_pre, regs), ev_pre.duration_min, regs)
+        te_feats = duration_features(alerts, ev_te, regs)
+        baseline_median = ev_pre.groupby("region").duration_min.median()
+        m2 = duration_model.evaluate(params, te_feats, ev_te.duration_min, baseline_median)
+        # sanity check: our closed-form median must match lifelines' own prediction
+        X_te = duration_model.design_matrix(te_feats, regs)
+        mu, _ = duration_model.predict_mu_sigma(params, te_feats)
+        gap = np.max(np.abs(np.exp(mu) - aft.predict_median(X_te).to_numpy()))
+        assert gap < 1e-6 * np.exp(mu).max(), f"median mismatch vs lifelines: {gap}"
+        m2.update({f"dur_valid_loglik_{k}": v for k, v in families.items()})
+        m2.update({"dur_train_events": len(ev_pre), "dur_test_events": len(ev_te), "dur_fit_seconds": time.time() - t0})
+        duration_model.save(params, MODELS_DIR / "duration_model.json")
+    [... 167 more lines truncated]
+[tool call: Bash]
+    PYTHONPATH=. uv run python -c "
+    import pandas as pd, numpy as np
+    from training.data import load_alerts, TRAIN_START
+    a=load_alerts(); a=a[(a.started_at>=TRAIN_START)&~a.naive&a.finished_at.notna()]
+    d=a.duration_min
+    print('events', len(a)); print('share <5min', (d<5).mean().round(3), ' <10', (d<10).mean().round(3), ' <=0', (d<=0).mean().round(4))
+    print(d.describe(percentiles=[.1,.25,.5,.75,.9]).round(1).to_dict())
+    # how often do starts cluster: other-oblast starts within 5 min after a start
+    s=np.sort(a.started_at.astype('int64').to_numpy()); f=np.searchsorted(s,s+5*60e9)-np.searchsorted(s,s,side='right')
+    print('other starts within +5 min: mean', f.mean().round(2), 'share>0', (f>0).mean().round(3))
+    "; grep -n "duration_features\|elapsed" app/server.py
+[tool output]
+    events 37278
+    share <5min 0.111  <10 0.218  <=0 0.0002
+    {'count': 37278.0, 'mean': 35.5, 'std': 109.7, 'min': 0.0, '10%': 4.5, '25%': 11.4, '50%': 22.5, '75%': 41.0, '90%': 72.2, 'max': 10629.2}
+    other starts within +5 min: mean 0.93 share>0 0.393
+    17:from training.features import duration_features, start_features
+    39:    alerts["mu"], sigma = duration_model.predict_mu_sigma(dur, duration_features(alerts, alerts, regs))
+    51:def duration_summary(mu: float, sigma: float, elapsed: float, started_at: pd.Timestamp) -> dict:
+    52:    q = lambda p: float(duration_model.quantile(mu, sigma, p, elapsed))
+    54:        "elapsed_min": elapsed, "median_min": q(0.5), "p10_min": q(0.1), "p90_min": q(0.9),
+    56:        "curve": duration_model.survival_curve(mu, sigma, CURVE_GRID.astype(float), elapsed).round(4).tolist(),
+    94:            elapsed = (ts - al_row.started_at).total_seconds() / 60
+    95:            item["duration"] = duration_summary(al_row.mu, a["sigma"], elapsed, al_row.started_at)
+    206:            # start time of a live alert is unknown -> treat it as starting now (elapsed = 0)
+    208:            df = duration_features(hist, ev, a["regions"])
+[tool call: Write]
+    /home/vumenira/projects/Air_raid_alert_analysis/exploration/05_feature_ideas.py
+    """Candidate features for both models, scored on the VALIDATION window only (test stays untouched).
+    
+    Start model: each candidate is added to START_FEATURES on its own. The 14-day validation is noisy, so the
+    baseline is also refit with several seeds to show how much log loss moves by chance.
+    Duration model: log-normal AFT, validation log-likelihood / MAE of the median / 80% interval coverage, for
+      (a) a forecast issued at the alert start (as now), and
+      (b) a forecast issued 5 min after the start: only alerts still active at 5 min, fit with left truncation
+          at 5 min, scored conditionally on lasting > 5 min. Features may then use everything known at start+5.
+    All candidates use only alerts started before the issue time and end times already in the past.
+    
+    Usage: PYTHONPATH=. uv run python exploration/05_feature_ideas.py
+    """
+    import numpy as np
+    import pandas as pd
+    from lifelines import LogNormalAFTFitter
+    from scipy.stats import norm
+    
+    from training import duration_model, start_model
+    from training.data import TRAIN_START, load_alerts, regions
+    from training.features import HOUR, MAX_GAP_MIN, NEIGHBORS, START_FEATURES, _active_at, _count_between, _ns, duration_features
+    from training.train import split_times, start_feature_frame
+    
+    MIN = HOUR // 60
+    NEVER = np.iinfo(np.int64).max
+    
+    
+    def region_arrays(alerts: pd.DataFrame, r: str):
+        a = alerts[alerts.region == r].sort_values("started_at")
+        s = _ns(a.started_at)
+        e = np.where(a.finished_at.isna(), NEVER, _ns(a.finished_at.fillna(a.started_at)))
+        return s, e, a.duration_min.to_numpy()
+    
+    
+    def last_finished(e, dur, t, k=1):
+        """Mean log1p duration of the last ``k`` alerts that had ended by t (NaN if none)."""
+        fin = e != NEVER
+        order = np.argsort(e[fin])
+        ends, d = e[fin][order], np.log1p(dur[fin][order])
+        j = np.searchsorted(ends, t, side="right")  # number of alerts ended by t
+        if len(d) == 0:
+            return np.full(len(t), np.nan)
+        c = np.concatenate([[0], np.cumsum(d)])
+        lo = np.maximum(j - k, 0)
+        return np.where(j > 0, (c[j] - c[lo]) / np.maximum(j - lo, 1), np.nan)
+    
+    
+    def n_active_at(per, t):
+        return sum(_active_at(s, e, t).astype(int) for s, e, _ in per.values())
+    
+    
+    # ---------------------------------------------------------------- start model
+    def start_candidates(alerts, feats, regs) -> pd.DataFrame:
+        per = {r: region_arrays(alerts, r) for r in regs}
+        t = _ns(feats.t)
+        all_s = np.sort(_ns(alerts.started_at))
+        ut, inv = np.unique(t, return_inverse=True)
+        out = pd.DataFrame(index=feats.index)
+        out["national_starts_15m"] = _count_between(all_s, t - 15 * MIN, t)
+        out["national_starts_3h"] = _count_between(all_s, t - 3 * HOUR, t)
+        out["d_active_1h"] = (n_active_at(per, ut) - n_active_at(per, ut - HOUR))[inv]
+        for col in ["prev_duration_log", "min_since_last_start", "nb_starts_3h", "starts_same_hour_7d"]:
+            out[col] = np.nan
+        for r, idx in feats.groupby("region", observed=True).indices.items():
+            s, e, dur = per[r]
+            tt = t[idx]
+            out.iloc[idx, out.columns.get_loc("prev_duration_log")] = last_finished(e, dur, tt)
+            i = np.searchsorted(s, tt, side="left") - 1
+            out.iloc[idx, out.columns.get_loc("min_since_last_start")] = np.where(
+                i >= 0, np.minimum((tt - s[np.maximum(i, 0)]) / MIN, MAX_GAP_MIN), MAX_GAP_MIN)
+            nbs = [n for n in NEIGHBORS.get(r, []) if n in per]
+            out.iloc[idx, out.columns.get_loc("nb_starts_3h")] = sum(_count_between(per[n][0], tt - 3 * HOUR, tt) for n in nbs) if nbs else 0
+            # same hour-of-day window on each of the previous 7 days (seasonal-naive as a feature)
+            out.iloc[idx, out.columns.get_loc("starts_same_hour_7d")] = sum(
+                _count_between(s, tt - k * 24 * HOUR, tt - k * 24 * HOUR + HOUR) for k in range(1, 8))
+        return out
+    
+    
+    def run_start(alerts, regs, valid_start, test_start, grid_end):
+        feats, y = start_feature_frame(alerts, regs, grid_end)
+        feats = pd.concat([feats, start_candidates(alerts, feats, regs)], axis=1)
+        calm = (feats.active_now == 0).to_numpy()
+        tr = (feats.t < valid_start).to_numpy() & calm
+        va = ((feats.t >= valid_start) & (feats.t < test_start)).to_numpy() & calm
+    
+        def score(fs, seed=0):
+            old = start_model.PARAMS["seed"]
+            start_model.PARAMS["seed"] = seed
+            try:
+                b, _ = start_model.fit_with_validation(feats[tr], y[tr], feats[va], y[va], features=fs)
+            finally:
+                start_model.PARAMS["seed"] = old
+            return b.best_iteration, start_model.metrics(y[va], start_model.predict(b, feats[va]), "v")
+    
+        print("\n=== START MODEL (validation, calm oblast-hours) ===")
+        base = [score(START_FEATURES, s)[1]["v_logloss"] for s in range(5)]
+        b_ll = base[0]
+        print(f"baseline log loss over 5 seeds: {np.round(base, 4)}  (sd {np.std(base):.4f})")
+        print(f"{'variant':28s} {'rounds':>6s} {'logloss':>8s} {'Δ':>8s} {'auc':>6s} {'pr_auc':>6s}")
+        cands = [c for c in start_candidates.__code__.co_consts if False]  # placeholder, replaced below
+        cands = ["national_starts_15m", "national_starts_3h", "d_active_1h", "prev_duration_log",
+                 "min_since_last_start", "nb_starts_3h", "starts_same_hour_7d"]
+        for name, fs in [("current", START_FEATURES)] + [(f"+{c}", START_FEATURES + [c]) for c in cands]:
+            n, m = score(fs)
+            print(f"{name:28s} {n:6d} {m['v_logloss']:8.4f} {m['v_logloss'] - b_ll:+8.4f} {m['v_roc_auc']:6.4f} {m['v_pr_auc']:6.4f}", flush=True)
+        return feats, y, score
+    
+    
+    # ---------------------------------------------------------------- duration model
+    def duration_candidates(alerts, events, regs, offset_min: float) -> pd.DataFrame:
+        """Candidates known at T = start + offset (the alert itself counts as active when offset > 0)."""
+        per = {r: region_arrays(alerts, r) for r in regs}
+        t0 = _ns(events.started_at)
+        T = t0 + int(offset_min * MIN)
+        all_s = np.sort(_ns(alerts.started_at))
+        fin = alerts[alerts.finished_at.notna()]
+        fin_e, fin_d = _ns(fin.finished_at), np.log1p(fin.duration_min.to_numpy())
+        order = np.argsort(fin_e)
+        fin_e, c = fin_e[order], np.concatenate([[0], np.cumsum(fin_d[order])])
+        out = pd.DataFrame(index=events.index)
+        out["n_active_T"] = n_active_at(per, T)
+        out["wave_starts"] = np.log1p(_count_between(all_s, t0 - 15 * MIN, T))  # starts nationwide, 15 min before .. T
+        out["national_starts_1h"] = np.log1p(_count_between(all_s, T - HOUR, T))
+        lo, hi = np.searchsorted(fin_e, T - 3 * HOUR, side="right"), np.searchsorted(fin_e, T, side="right")
+        out["nat_recent_logdur"] = np.where(hi > lo, (c[hi] - c[lo]) / np.maximum(hi - lo, 1), np.log1p(20))
+        for col in ["nb_active_frac", "starts_24h", "gap_log", "prev_dur_mean5"]:
+            out[col] = np.nan
+        act = {r: _active_at(s, e, T).astype(float) for r, (s, e, _) in per.items()}
+        for r, idx in events.groupby("region").indices.items():
+            s, e, dur = per[r]
+            nbs = [n for n in NEIGHBORS.get(r, []) if n in per]
+            out.iloc[idx, out.columns.get_loc("nb_active_frac")] = (sum(act[n][idx] for n in nbs) / len(nbs)) if nbs else 0
+            out.iloc[idx, out.columns.get_loc("starts_24h")] = np.log1p(_count_between(s, t0[idx] - 24 * HOUR, t0[idx]))
+            fin_r = np.sort(e[e != NEVER])
+            j = np.searchsorted(fin_r, t0[idx], side="right") - 1
+            gap = np.where(j >= 0, (t0[idx] - fin_r[np.maximum(j, 0)]) / MIN, MAX_GAP_MIN) if len(fin_r) else MAX_GAP_MIN
+            out.iloc[idx, out.columns.get_loc("gap_log")] = np.log1p(np.minimum(gap, MAX_GAP_MIN))
+            out.iloc[idx, out.columns.get_loc("prev_dur_mean5")] = last_finished(e, dur, t0[idx], k=5)
+        return out.fillna({"prev_dur_mean5": np.log1p(20)})
+    
+    
+    def fit_score(X_tr, d_tr, X_va, d_va, entry: float):
+        df = X_tr.assign(duration=d_tr, event=1)
+        kw = {}
+        if entry > 0:
+            df["entry"] = entry
+            kw["entry_col"] = "entry"
+        aft = LogNormalAFTFitter(penalizer=0.01).fit(df, duration_col="duration", event_col="event", **kw)
+        p = aft.params_.loc["mu_"]
+        mu = p["Intercept"] + X_va[p.drop("Intercept").index].to_numpy() @ p.drop("Intercept").to_numpy()
+        sigma = float(np.exp(aft.params_.loc[("sigma_", "Intercept")]))
+        y = d_va
+        ly = np.log(y)
+        # log-likelihood of the duration in minutes, conditional on lasting > entry
+        ll = norm.logpdf(ly, mu, sigma) - ly - (norm.logsf((np.log(entry) - mu) / sigma) if entry > 0 else 0)
+        med = duration_model.quantile(mu, sigma, 0.5, entry)
+        lo, hi = duration_model.quantile(mu, sigma, 0.1, entry), duration_model.quantile(mu, sigma, 0.9, entry)
+        return {"loglik": float(np.mean(ll)), "mae": float(np.mean(np.abs(med - y))),
+                "medae": float(np.median(np.abs(med - y))), "cov80": float(np.mean((y >= lo) & (y <= hi))), "sigma": sigma}
+    
+    
+    def run_duration(alerts, regs, valid_start, test_start):
+        clean = alerts[~alerts.naive & alerts.finished_at.notna()]
+        ev_tr = clean[(clean.started_at >= TRAIN_START) & (clean.finished_at < valid_start)]
+        ev_va = clean[(clean.started_at >= valid_start) & (clean.finished_at < test_start)]
+        cands = ["nb_active_frac", "wave_starts", "national_starts_1h", "starts_24h", "gap_log", "prev_dur_mean5", "nat_recent_logdur"]
+        for offset in (0, 5):
+            tr, va = (ev_tr, ev_va) if offset == 0 else (ev_tr[ev_tr.duration_min > offset], ev_va[ev_va.duration_min > offset])
+            base_tr = duration_model.design_matrix(duration_features(alerts, tr, regs), regs)
+            base_va = duration_model.design_matrix(duration_features(alerts, va, regs), regs)
+            c_tr, c_va = duration_candidates(alerts, tr, regs, offset), duration_candidates(alerts, va, regs, offset)
+            d_tr, d_va = tr.duration_min.clip(lower=0.5).to_numpy(), va.duration_min.clip(lower=0.5).to_numpy()
+            print(f"\n=== DURATION, forecast issued at start + {offset} min "
+                  f"({len(tr)} train / {len(va)} valid alerts{', scored given > 5 min' if offset else ''}) ===")
+            print(f"{'variant':28s} {'loglik':>8s} {'Δ':>7s} {'MAE':>6s} {'MedAE':>6s} {'cov80':>6s} {'sigma':>6s}")
+            variants = [("current", [])]
+            if offset:
+                variants.append(("n_active @+5 (replaces)", ["n_active_T"]))
+            variants += [(f"+{c}", [c]) for c in cands]
+            ref = None
+            for name, extra in variants:
+                X_tr, X_va = base_tr.copy(), base_va.copy()
+                if "n_active_T" in extra:
+                    X_tr["n_active_oblasts"], X_va["n_active_oblasts"] = c_tr.n_active_T.to_numpy(), c_va.n_active_T.to_numpy()
+                    extra = []
+                for c in extra:
+                    X_tr[c], X_va[c] = c_tr[c].to_numpy(), c_va[c].to_numpy()
+                m = fit_score(X_tr, d_tr, X_va, d_va, offset)
+                ref = m["loglik"] if ref is None else ref
+                print(f"{name:28s} {m['loglik']:8.4f} {m['loglik'] - ref:+7.4f} {m['mae']:6.1f} {m['medae']:6.1f} {m['cov80']:6.1%} {m['sigma']:6.3f}", flush=True)
+    
+    
+    def main() -> None:
+        alerts = load_alerts()
+        regs = regions(alerts)
+        valid_start, test_start, grid_end = split_times(alerts)
+        run_duration(alerts, regs, valid_start, test_start)
+        run_start(alerts, regs, valid_start, test_start, grid_end)
+    
+    
+    if __name__ == "__main__":
+        main()
+[tool output]
+    File created successfully at: /home/vumenira/projects/Air_raid_alert_analysis/exploration/05_feature_ideas.py (file state is current in your context — no need to Read it back)
+[tool call: Bash]
+    sed -i '/placeholder, replaced below/d' exploration/05_feature_ideas.py && systemd-run --user --scope -q -p MemoryMax=3G -p MemorySwapMax=0 /usr/bin/time -f "%e s, %M KB" env PYTHONPATH=. uv run python exploration/05_feature_ideas.py 2>&1 | grep -v -i "warn"
+[tool output]
+    === DURATION, forecast issued at start + 0 min (31369 train / 1869 valid alerts) ===
+    variant                        loglik       Δ    MAE  MedAE  cov80  sigma
+    current                       -4.3638 +0.0000   19.5   11.7  78.8%  1.073
+    +nb_active_frac               -4.3605 +0.0033   19.4   11.7  78.9%  1.071
+    +wave_starts                  -4.3617 +0.0021   19.5   11.7  78.9%  1.073
+    +national_starts_1h           -4.3500 +0.0138   19.3   11.4  78.4%  1.067
+    +starts_24h                   -4.3526 +0.0112   19.4   11.2  79.0%  1.072
+    +gap_log                      -4.3519 +0.0119   19.3   11.4  78.4%  1.070
+    +prev_dur_mean5               -4.3588 +0.0050   19.5   11.6  79.0%  1.072
+    +nat_recent_logdur            -4.3597 +0.0041   19.5   11.6  78.7%  1.072
+    
+    === DURATION, forecast issued at start + 5 min (28202 train / 1546 valid alerts, scored given > 5 min) ===
+    variant                        loglik       Δ    MAE  MedAE  cov80  sigma
+    current                       -4.3108 +0.0000   20.2   12.2  76.5%  0.801
+    n_active @+5 (replaces)       -4.3150 -0.0042   20.3   12.5  76.2%  0.801
+    +nb_active_frac               -4.3104 +0.0004   20.2   12.5  76.3%  0.796
+    +wave_starts                  -4.3127 -0.0019   20.2   12.2  76.1%  0.797
+    +national_starts_1h           -4.3050 +0.0058   20.1   11.9  76.3%  0.794
+    +starts_24h                   -4.3036 +0.0071   20.1   12.0  76.8%  0.800
+    +gap_log                      -4.3063 +0.0045   20.1   12.2  76.2%  0.800
+    +prev_dur_mean5               -4.3083 +0.0025   20.1   12.2  76.2%  0.800
+    +nat_recent_logdur            -4.3091 +0.0016   20.2   12.0  76.3%  0.800
+    
+    === START MODEL (validation, calm oblast-hours) ===
+    baseline log loss over 5 seeds: [0.4385 0.4386 0.4385 0.4387 0.4386]  (sd 0.0001)
+    variant                      rounds  logloss        Δ    auc pr_auc
+    current                         124   0.4385  +0.0000 0.7766 0.5128
+    +national_starts_15m             87   0.4387  +0.0002 0.7762 0.5120
+    +national_starts_3h             103   0.4387  +0.0001 0.7763 0.5126
+    +d_active_1h                    114   0.4386  +0.0001 0.7762 0.5130
+    +prev_duration_log              375   0.4342  -0.0043 0.7845 0.5150
+    +min_since_last_start           105   0.4387  +0.0002 0.7765 0.5109
+    +nb_starts_3h                   134   0.4385  -0.0000 0.7765 0.5132
+    +starts_same_hour_7d             97   0.4388  +0.0003 0.7763 0.5124
+    62.10 s, 355088 KB
+[tool call: Read]
+    {
+     "file_path": "/home/vumenira/projects/Air_raid_alert_analysis/exploration/05_feature_ideas.py",
+     "offset": 95,
+     "limit": 30
+    }
+[tool call: Read]
+    {
+     "file_path": "/home/vumenira/projects/Air_raid_alert_analysis/exploration/05_feature_ideas.py",
+     "offset": 150,
+     "limit": 70
+    }
+[tool output]
+    95	    base = [score(START_FEATURES, s)[1]["v_logloss"] for s in range(5)]
+    96	    b_ll = base[0]
+    97	    print(f"baseline log loss over 5 seeds: {np.round(base, 4)}  (sd {np.std(base):.4f})")
+    98	    print(f"{'variant':28s} {'rounds':>6s} {'logloss':>8s} {'Δ':>8s} {'auc':>6s} {'pr_auc':>6s}")
+    99	    cands = ["national_starts_15m", "national_starts_3h", "d_active_1h", "prev_duration_log",
+    100	             "min_since_last_start", "nb_starts_3h", "starts_same_hour_7d"]
+    101	    for name, fs in [("current", START_FEATURES)] + [(f"+{c}", START_FEATURES + [c]) for c in cands]:
+    102	        n, m = score(fs)
+    103	        print(f"{name:28s} {n:6d} {m['v_logloss']:8.4f} {m['v_logloss'] - b_ll:+8.4f} {m['v_roc_auc']:6.4f} {m['v_pr_auc']:6.4f}", flush=True)
+    104	    return feats, y, score
+    105	
+    106	
+    107	# ---------------------------------------------------------------- duration model
+    108	def duration_candidates(alerts, events, regs, offset_min: float) -> pd.DataFrame:
+    109	    """Candidates known at T = start + offset (the alert itself counts as active when offset > 0)."""
+    110	    per = {r: region_arrays(alerts, r) for r in regs}
+    111	    t0 = _ns(events.started_at)
+    112	    T = t0 + int(offset_min * MIN)
+    113	    all_s = np.sort(_ns(alerts.started_at))
+    114	    fin = alerts[alerts.finished_at.notna()]
+    115	    fin_e, fin_d = _ns(fin.finished_at), np.log1p(fin.duration_min.to_numpy())
+    116	    order = np.argsort(fin_e)
+    117	    fin_e, c = fin_e[order], np.concatenate([[0], np.cumsum(fin_d[order])])
+    118	    out = pd.DataFrame(index=events.index)
+    119	    out["n_active_T"] = n_active_at(per, T)
+    120	    out["wave_starts"] = np.log1p(_count_between(all_s, t0 - 15 * MIN, T))  # starts nationwide, 15 min before .. T
+    121	    out["national_starts_1h"] = np.log1p(_count_between(all_s, T - HOUR, T))
+    122	    lo, hi = np.searchsorted(fin_e, T - 3 * HOUR, side="right"), np.searchsorted(fin_e, T, side="right")
+    123	    out["nat_recent_logdur"] = np.where(hi > lo, (c[hi] - c[lo]) / np.maximum(hi - lo, 1), np.log1p(20))
+    124	    for col in ["nb_active_frac", "starts_24h", "gap_log", "prev_dur_mean5"]:
+[tool output]
+    150	    y = d_va
+    151	    ly = np.log(y)
+    152	    # log-likelihood of the duration in minutes, conditional on lasting > entry
+    153	    ll = norm.logpdf(ly, mu, sigma) - ly - (norm.logsf((np.log(entry) - mu) / sigma) if entry > 0 else 0)
+    154	    med = duration_model.quantile(mu, sigma, 0.5, entry)
+    155	    lo, hi = duration_model.quantile(mu, sigma, 0.1, entry), duration_model.quantile(mu, sigma, 0.9, entry)
+    156	    return {"loglik": float(np.mean(ll)), "mae": float(np.mean(np.abs(med - y))),
+    157	            "medae": float(np.median(np.abs(med - y))), "cov80": float(np.mean((y >= lo) & (y <= hi))), "sigma": sigma}
+    158	
+    159	
+    160	def run_duration(alerts, regs, valid_start, test_start):
+    161	    clean = alerts[~alerts.naive & alerts.finished_at.notna()]
+    162	    ev_tr = clean[(clean.started_at >= TRAIN_START) & (clean.finished_at < valid_start)]
+    163	    ev_va = clean[(clean.started_at >= valid_start) & (clean.finished_at < test_start)]
+    164	    cands = ["nb_active_frac", "wave_starts", "national_starts_1h", "starts_24h", "gap_log", "prev_dur_mean5", "nat_recent_logdur"]
+    165	    for offset in (0, 5):
+    166	        tr, va = (ev_tr, ev_va) if offset == 0 else (ev_tr[ev_tr.duration_min > offset], ev_va[ev_va.duration_min > offset])
+    167	        base_tr = duration_model.design_matrix(duration_features(alerts, tr, regs), regs)
+    168	        base_va = duration_model.design_matrix(duration_features(alerts, va, regs), regs)
+    169	        c_tr, c_va = duration_candidates(alerts, tr, regs, offset), duration_candidates(alerts, va, regs, offset)
+    170	        d_tr, d_va = tr.duration_min.clip(lower=0.5).to_numpy(), va.duration_min.clip(lower=0.5).to_numpy()
+    171	        print(f"\n=== DURATION, forecast issued at start + {offset} min "
+    172	              f"({len(tr)} train / {len(va)} valid alerts{', scored given > 5 min' if offset else ''}) ===")
+    173	        print(f"{'variant':28s} {'loglik':>8s} {'Δ':>7s} {'MAE':>6s} {'MedAE':>6s} {'cov80':>6s} {'sigma':>6s}")
+    174	        variants = [("current", [])]
+    175	        if offset:
+    176	            variants.append(("n_active @+5 (replaces)", ["n_active_T"]))
+    177	        variants += [(f"+{c}", [c]) for c in cands]
+    178	        ref = None
+    179	        for name, extra in variants:
+    180	            X_tr, X_va = base_tr.copy(), base_va.copy()
+    181	            if "n_active_T" in extra:
+    182	                X_tr["n_active_oblasts"], X_va["n_active_oblasts"] = c_tr.n_active_T.to_numpy(), c_va.n_active_T.to_numpy()
+    183	                extra = []
+    184	            for c in extra:
+    185	                X_tr[c], X_va[c] = c_tr[c].to_numpy(), c_va[c].to_numpy()
+    186	            m = fit_score(X_tr, d_tr, X_va, d_va, offset)
+    187	            ref = m["loglik"] if ref is None else ref
+    188	            print(f"{name:28s} {m['loglik']:8.4f} {m['loglik'] - ref:+7.4f} {m['mae']:6.1f} {m['medae']:6.1f} {m['cov80']:6.1%} {m['sigma']:6.3f}", flush=True)
+    189	
+    190	
+    191	def main() -> None:
+    192	    alerts = load_alerts()
+    193	    regs = regions(alerts)
+    194	    valid_start, test_start, grid_end = split_times(alerts)
+    195	    run_duration(alerts, regs, valid_start, test_start)
+    196	    run_start(alerts, regs, valid_start, test_start, grid_end)
+    197	
+    198	
+    199	if __name__ == "__main__":
+    200	    main()
+    201
+
+==== CLAUDE (2026-10-12 17:08:54 UTC) ====
+I'm adding a second validation window, combination variants and day-level bootstrap intervals to the experiment script, to check the winners hold up.
+[tool call: Bash]
+    python3 - <<'EOF'
+    from pathlib import Path
+    p = Path("exploration/05_feature_ideas.py"); s = p.read_text()
+    def rep(a, b):
+        global s
+        assert s.count(a) == 1, a
+        s = s.replace(a, b)
+    
+    rep('''Usage: PYTHONPATH=. uv run python exploration/05_feature_ideas.py
+    """
+    import numpy as np''', '''Robustness: Δ columns come with a 90% bootstrap interval that resamples whole days of the validation window
+    (alerts come in waves, so single rows aren't independent). ``--shift 14`` moves train/validation 14 days
+    earlier, to check that a gain is not a property of one particular fortnight.
+    
+    Usage: PYTHONPATH=. uv run python exploration/05_feature_ideas.py [--shift DAYS]
+    """
+    import argparse
+    
+    import numpy as np''')
+    
+    rep('''def n_active_at(per, t):''', '''def day_ci(diff: np.ndarray, days: np.ndarray, n: int = 1000, seed: int = 0) -> tuple[float, float]:
+        """90% interval of mean(diff), resampling whole days."""
+        df = pd.DataFrame({"d": diff, "day": days}).groupby("day").d.agg(["sum", "size"])
+        rng = np.random.default_rng(seed)
+        k = rng.integers(0, len(df), (n, len(df)))
+        means = df["sum"].to_numpy()[k].sum(1) / df["size"].to_numpy()[k].sum(1)
+        return tuple(np.quantile(means, [0.05, 0.95]))
+    
+    
+    def n_active_at(per, t):''')
+    
+    # start model: per-row log loss, CI, combos
+    rep('''        return b.best_iteration, start_model.metrics(y[va], start_model.predict(b, feats[va]), "v")''',
+        '''        p = np.clip(start_model.predict(b, feats[va]), 1e-6, 1 - 1e-6)
+            rows = -(y[va] * np.log(p) + (1 - y[va]) * np.log(1 - p))
+            return b.best_iteration, start_model.metrics(y[va], p, "v"), rows''')
+    rep('''    base = [score(START_FEATURES, s)[1]["v_logloss"] for s in range(5)]
+        b_ll = base[0]''', '''    base = [score(START_FEATURES, s)[1]["v_logloss"] for s in range(5)]
+        _, _, ref_rows = score(START_FEATURES)
+        b_ll = ref_rows.mean()
+        days = feats.t[va].dt.floor("D").to_numpy()''')
+    rep('''    print(f"{'variant':28s} {'rounds':>6s} {'logloss':>8s} {'Δ':>8s} {'auc':>6s} {'pr_auc':>6s}")''',
+        '''    print(f"{'variant':34s} {'rounds':>6s} {'logloss':>8s} {'Δ':>8s} {'90% CI (by day)':>18s} {'auc':>6s} {'pr_auc':>6s}")''')
+    rep('''    for name, fs in [("current", START_FEATURES)] + [(f"+{c}", START_FEATURES + [c]) for c in cands]:
+            n, m = score(fs)
+            print(f"{name:28s} {n:6d} {m['v_logloss']:8.4f} {m['v_logloss'] - b_ll:+8.4f} {m['v_roc_auc']:6.4f} {m['v_pr_auc']:6.4f}", flush=True)
+        return feats, y, score''', '''    variants = [("current", START_FEATURES)] + [(f"+{c}", START_FEATURES + [c]) for c in cands]
+        variants += [("+prev_duration_log+nb_starts_3h", START_FEATURES + ["prev_duration_log", "nb_starts_3h"]),
+                     ("+prev_duration_log+min_since_last_start", START_FEATURES + ["prev_duration_log", "min_since_last_start"])]
+        for name, fs in variants:
+            n, m, rows = score(fs)
+            lo, hi = day_ci(rows - ref_rows, days)
+            print(f"{name:34s} {n:6d} {m['v_logloss']:8.4f} {m['v_logloss'] - b_ll:+8.4f} {f'[{lo:+.4f}, {hi:+.4f}]':>18s} "
+                  f"{m['v_roc_auc']:6.4f} {m['v_pr_auc']:6.4f}", flush=True)''')
+    
+    # duration: per-alert ll, CI, combos
+    rep('''    return {"loglik": float(np.mean(ll)), "mae"''', '''    return {"ll": ll, "loglik": float(np.mean(ll)), "mae"''')
+    rep('''    cands = ["nb_active_frac", "wave_starts", "national_starts_1h", "starts_24h", "gap_log", "prev_dur_mean5", "nat_recent_logdur"]''',
+        '''    cands = ["nb_active_frac", "wave_starts", "national_starts_1h", "starts_24h", "gap_log", "prev_dur_mean5", "nat_recent_logdur"]
+        combos = [("+nat1h+starts24h+gap", ["national_starts_1h", "starts_24h", "gap_log"]),
+                  ("+nat1h+starts24h+gap+nb_active", ["national_starts_1h", "starts_24h", "gap_log", "nb_active_frac"]),
+                  ("+nat1h+gap", ["national_starts_1h", "gap_log"])]''')
+    rep('''        print(f"{'variant':28s} {'loglik':>8s} {'Δ':>7s} {'MAE':>6s} {'MedAE':>6s} {'cov80':>6s} {'sigma':>6s}")''',
+        '''        print(f"{'variant':34s} {'loglik':>8s} {'Δ':>7s} {'90% CI (by day)':>18s} {'MAE':>6s} {'MedAE':>6s} {'cov80':>6s} {'sigma':>6s}")
+            days = va.started_at.dt.floor("D").to_numpy()''')
+    rep('''        variants += [(f"+{c}", [c]) for c in cands]''', '''        variants += [(f"+{c}", [c]) for c in cands] + combos''')
+    rep('''            ref = m["loglik"] if ref is None else ref
+                print(f"{name:28s} {m['loglik']:8.4f} {m['loglik'] - ref:+7.4f} {m['mae']:6.1f}''',
+        '''            ref = m["ll"] if ref is None else ref
+                lo, hi = day_ci(m["ll"] - ref, days)
+                print(f"{name:34s} {m['loglik']:8.4f} {m['loglik'] - ref.mean():+7.4f} {f'[{lo:+.4f}, {hi:+.4f}]':>18s} {m['mae']:6.1f}''')
+    
+    rep('''def main() -> None:
+        alerts = load_alerts()
+        regs = regions(alerts)
+        valid_start, test_start, grid_end = split_times(alerts)''', '''def main() -> None:
+        ap = argparse.ArgumentParser()
+        ap.add_argument("--shift", type=int, default=0, help="move the validation window this many days earlier")
+        args = ap.parse_args()
+        alerts = load_alerts()
+        regs = regions(alerts)
+        valid_start, test_start, grid_end = split_times(alerts)
+        if args.shift:  # validation = the fortnight before the usual one; grid ends where it ends (labels inside)
+            shift = pd.Timedelta(days=args.shift)
+            valid_start, test_start, grid_end = valid_start - shift, test_start - shift, test_start - shift
+        print(f"validation window {valid_start} -> {test_start}")''')
+    p.write_text(s)
+    EOF
+    for sh in 0 14; do systemd-run --user --scope -q -p MemoryMax=3G -p MemorySwapMax=0 env PYTHONPATH=. uv run python exploration/05_feature_ideas.py --shift $sh 2>&1 | grep -v -i "warn" > /tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad/fi_$sh.txt & done; wait; cat /tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad/fi_{0,14}.txt
+[tool output]
+    [1]-  Done                    systemd-run --user --scope -q -p MemoryMax=3G -p MemorySwapMax=0 env PYTHONPATH=. uv run python exploration/05_feature_ideas.py --shift $sh 2>&1 | grep -v -i "warn" > /tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad/fi_$sh.txt
+    [2]+  Done                    systemd-run --user --scope -q -p MemoryMax=3G -p MemorySwapMax=0 env PYTHONPATH=. uv run python exploration/05_feature_ideas.py --shift $sh 2>&1 | grep -v -i "warn" > /tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad/fi_$sh.txt
+    validation window 2026-08-31 03:00:00+00:00 -> 2026-09-14 03:00:00+00:00
+    
+    === DURATION, forecast issued at start + 0 min (31369 train / 1869 valid alerts) ===
+    variant                              loglik       Δ    90% CI (by day)    MAE  MedAE  cov80  sigma
+    current                             -4.3638 +0.0000 [+0.0000, +0.0000]   19.5   11.7  78.8%  1.073
+    +nb_active_frac                     -4.3605 +0.0033 [-0.0004, +0.0069]   19.4   11.7  78.9%  1.071
+    +wave_starts                        -4.3617 +0.0021 [+0.0004, +0.0038]   19.5   11.7  78.9%  1.073
+    +national_starts_1h                 -4.3500 +0.0138 [+0.0087, +0.0184]   19.3   11.4  78.4%  1.067
+    +starts_24h                         -4.3526 +0.0112 [+0.0064, +0.0162]   19.4   11.2  79.0%  1.072
+    +gap_log                            -4.3519 +0.0119 [+0.0065, +0.0176]   19.3   11.4  78.4%  1.070
+    +prev_dur_mean5                     -4.3588 +0.0050 [+0.0012, +0.0082]   19.5   11.6  79.0%  1.072
+    +nat_recent_logdur                  -4.3597 +0.0041 [+0.0012, +0.0072]   19.5   11.6  78.7%  1.072
+    +nat1h+starts24h+gap                -4.3409 +0.0229 [+0.0152, +0.0305]   19.2   10.9  78.4%  1.065
+    +nat1h+starts24h+gap+nb_active      -4.3377 +0.0261 [+0.0186, +0.0333]   19.2   10.9  78.5%  1.063
+    +nat1h+gap                          -4.3440 +0.0198 [+0.0127, +0.0267]   19.3   11.2  78.3%  1.065
+    
+    === DURATION, forecast issued at start + 5 min (28202 train / 1546 valid alerts, scored given > 5 min) ===
+    variant                              loglik       Δ    90% CI (by day)    MAE  MedAE  cov80  sigma
+    current                             -4.3108 +0.0000 [+0.0000, +0.0000]   20.2   12.2  76.5%  0.801
+    n_active @+5 (replaces)             -4.3150 -0.0042 [-0.0077, -0.0004]   20.3   12.5  76.2%  0.801
+    +nb_active_frac                     -4.3104 +0.0004 [-0.0052, +0.0060]   20.2   12.5  76.3%  0.796
+    +wave_starts                        -4.3127 -0.0019 [-0.0071, +0.0036]   20.2   12.2  76.1%  0.797
+    +national_starts_1h                 -4.3050 +0.0058 [+0.0008, +0.0111]   20.1   11.9  76.3%  0.794
+    +starts_24h                         -4.3036 +0.0071 [+0.0031, +0.0114]   20.1   12.0  76.8%  0.800
+    +gap_log                            -4.3063 +0.0045 [+0.0023, +0.0068]   20.1   12.2  76.2%  0.800
+    +prev_dur_mean5                     -4.3083 +0.0025 [-0.0006, +0.0057]   20.1   12.2  76.2%  0.800
+    +nat_recent_logdur                  -4.3091 +0.0016 [-0.0015, +0.0049]   20.2   12.0  76.3%  0.800
+    +nat1h+starts24h+gap                -4.2997 +0.0111 [+0.0059, +0.0165]   20.0   11.7  76.7%  0.794
+    +nat1h+starts24h+gap+nb_active      -4.2973 +0.0135 [+0.0096, +0.0179]   20.0   11.9  76.6%  0.792
+    +nat1h+gap                          -4.3035 +0.0073 [+0.0023, +0.0125]   20.1   11.9  76.3%  0.794
+    
+    === START MODEL (validation, calm oblast-hours) ===
+    baseline log loss over 5 seeds: [0.4385 0.4386 0.4385 0.4387 0.4386]  (sd 0.0001)
+    variant                            rounds  logloss        Δ    90% CI (by day)    auc pr_auc
+    current                               124   0.4385  +0.0000 [+0.0000, +0.0000] 0.7766 0.5128
+    +national_starts_15m                   87   0.4387  +0.0002 [-0.0008, +0.0011] 0.7762 0.5120
+    +national_starts_3h                   103   0.4387  +0.0001 [-0.0007, +0.0009] 0.7763 0.5126
+    +d_active_1h                          114   0.4386  +0.0001 [-0.0005, +0.0007] 0.7762 0.5130
+    +prev_duration_log                    375   0.4342  -0.0043 [-0.0065, -0.0021] 0.7845 0.5150
+    +min_since_last_start                 105   0.4387  +0.0002 [-0.0004, +0.0008] 0.7765 0.5109
+    +nb_starts_3h                         134   0.4385  -0.0000 [-0.0006, +0.0006] 0.7765 0.5132
+    +starts_same_hour_7d                   97   0.4388  +0.0003 [-0.0007, +0.0012] 0.7763 0.5124
+    +prev_duration_log+nb_starts_3h       223   0.4336  -0.0049 [-0.0071, -0.0026] 0.7847 0.5187
+    +prev_duration_log+min_since_last_start    157   0.4341  -0.0044 [-0.0062, -0.0026] 0.7836 0.5182
+      shift = pd.Timedelta(days=args.shift)
+    validation window 2026-08-17 03:00:00+00:00 -> 2026-08-31 03:00:00+00:00
+    
+    === DURATION, forecast issued at start + 0 min (29483 train / 1884 valid alerts) ===
+    variant                              loglik       Δ    90% CI (by day)    MAE  MedAE  cov80  sigma
+    current                             -4.3342 +0.0000 [+0.0000, +0.0000]   18.1   11.3  81.2%  1.065
+    +nb_active_frac                     -4.3334 +0.0009 [-0.0014, +0.0031]   18.1   11.1  81.1%  1.063
+    +wave_starts                        -4.3317 +0.0025 [+0.0014, +0.0036]   18.1   11.1  81.2%  1.065
+    +national_starts_1h                 -4.3195 +0.0147 [+0.0106, +0.0191]   17.9   10.8  81.0%  1.060
+    +starts_24h                         -4.3261 +0.0081 [+0.0029, +0.0130]   18.1   10.9  80.9%  1.064
+    +gap_log                            -4.3236 +0.0106 [+0.0063, +0.0148]   18.0   10.9  80.8%  1.062
+    +prev_dur_mean5                     -4.3259 +0.0084 [+0.0046, +0.0127]   18.0   11.0  81.5%  1.064
+    +nat_recent_logdur                  -4.3285 +0.0058 [+0.0020, +0.0100]   18.0   11.0  81.2%  1.064
+    +nat1h+starts24h+gap                -4.3128 +0.0214 [+0.0147, +0.0286]   17.9   10.6  80.8%  1.058
+    +nat1h+starts24h+gap+nb_active      -4.3116 +0.0226 [+0.0161, +0.0293]   17.8   10.5  80.7%  1.056
+    +nat1h+gap                          -4.3147 +0.0196 [+0.0141, +0.0253]   17.9   10.7  80.8%  1.058
+    
+    === DURATION, forecast issued at start + 5 min (26611 train / 1589 valid alerts, scored given > 5 min) ===
+    variant                              loglik       Δ    90% CI (by day)    MAE  MedAE  cov80  sigma
+    current                             -4.2395 +0.0000 [+0.0000, +0.0000]   18.5   11.4  79.0%  0.799
+    n_active @+5 (replaces)             -4.2411 -0.0016 [-0.0033, +0.0001]   18.5   11.6  78.7%  0.799
+    +nb_active_frac                     -4.2362 +0.0032 [+0.0002, +0.0067]   18.5   11.5  78.9%  0.794
+    +wave_starts                        -4.2341 +0.0053 [+0.0039, +0.0070]   18.4   11.7  79.4%  0.795
+    +national_starts_1h                 -4.2279 +0.0116 [+0.0079, +0.0151]   18.2   11.3  79.1%  0.793
+    +starts_24h                         -4.2356 +0.0039 [+0.0004, +0.0070]   18.4   11.3  79.2%  0.798
+    +gap_log                            -4.2374 +0.0020 [+0.0000, +0.0042]   18.5   11.6  79.0%  0.798
+    +prev_dur_mean5                     -4.2336 +0.0059 [+0.0037, +0.0079]   18.4   11.4  78.6%  0.798
+    +nat_recent_logdur                  -4.2348 +0.0047 [+0.0019, +0.0076]   18.4   11.4  79.1%  0.798
+    +nat1h+starts24h+gap                -4.2254 +0.0140 [+0.0088, +0.0185]   18.2   11.3  79.2%  0.792
+    +nat1h+starts24h+gap+nb_active      -4.2229 +0.0165 [+0.0122, +0.0209]   18.2   11.3  79.3%  0.790
+    +nat1h+gap                          -4.2275 +0.0120 [+0.0080, +0.0158]   18.2   11.3  79.3%  0.792
+    
+    === START MODEL (validation, calm oblast-hours) ===
+    baseline log loss over 5 seeds: [0.408  0.4076 0.4073 0.4073 0.4073]  (sd 0.0003)
+    variant                            rounds  logloss        Δ    90% CI (by day)    auc pr_auc
+    current                               234   0.4080  +0.0000 [+0.0000, +0.0000] 0.8104 0.5292
+    +national_starts_15m                  189   0.4077  -0.0003 [-0.0010, +0.0004] 0.8113 0.5279
+    +national_starts_3h                   171   0.4072  -0.0008 [-0.0025, +0.0010] 0.8113 0.5298
+    +d_active_1h                          110   0.4076  -0.0004 [-0.0018, +0.0009] 0.8115 0.5306
+    +prev_duration_log                    168   0.4043  -0.0037 [-0.0051, -0.0023] 0.8159 0.5326
+    +min_since_last_start                 169   0.4078  -0.0002 [-0.0008, +0.0004] 0.8110 0.5291
+    +nb_starts_3h                         217   0.4069  -0.0011 [-0.0024, +0.0000] 0.8113 0.5268
+    +starts_same_hour_7d                  133   0.4063  -0.0017 [-0.0030, -0.0002] 0.8124 0.5337
+    +prev_duration_log+nb_starts_3h       213   0.4037  -0.0043 [-0.0061, -0.0025] 0.8163 0.5295
+    +prev_duration_log+min_since_last_start    233   0.4037  -0.0043 [-0.0057, -0.0029] 0.8166 0.5314
+[tool call: Bash]
+    python3 - <<'EOF'
+    from pathlib import Path
+    p = Path("training/features.py"); s = p.read_text()
+    def rep(a, b):
+        global s
+        assert s.count(a) == 1, a
+        s = s.replace(a, b)
+    rep('''    "nb_active_frac", "nb_starts_1h",
+    ]
+    DURATION_FEATURES = ["region", "hour_sin", "hour_cos", "n_active_oblasts", "prev_duration_min"]''',
+    '''    "nb_active_frac", "nb_starts_1h", "prev_duration_log",
+    ]
+    # Additions over the first version (region, hour, n_active_oblasts, prev_duration_min) were chosen on two
+    # validation windows in exploration/05_feature_ideas.py.
+    DURATION_FEATURES = ["region", "hour_sin", "hour_cos", "n_active_oblasts", "prev_duration_min",
+                         "national_starts_1h", "starts_24h", "min_since_last_end", "nb_active_frac"]''')
+    rep('''        finished_ends = np.sort(e[e != np.iinfo(np.int64).max])
+            j = np.searchsorted(finished_ends, t, side="right") - 1
+            last_end = finished_ends[np.maximum(j, 0)] if len(finished_ends) else np.zeros(len(t), dtype=np.int64)
+            gap = np.where(j >= 0, (t - last_end) / 6e10, MAX_GAP_MIN)''',
+    '''        fin = e != np.iinfo(np.int64).max
+            order = np.argsort(e[fin])
+            finished_ends, finished_dur = e[fin][order], (e[fin] - s[fin])[order] / 6e10
+            j = np.searchsorted(finished_ends, t, side="right") - 1
+            last_end = finished_ends[np.maximum(j, 0)] if len(finished_ends) else np.zeros(len(t), dtype=np.int64)
+            gap = np.where(j >= 0, (t - last_end) / 6e10, MAX_GAP_MIN)
+            # duration of the last alert that had already ended by t (NaN if none; LightGBM handles it)
+            last_dur = np.where(j >= 0, finished_dur[np.maximum(j, 0)], np.nan) if len(finished_ends) else np.full(len(t), np.nan)''')
+    rep('''            "nb_starts_1h": sum(starts_1h[n] for n in nbs) if nbs else np.zeros(len(t), dtype=int),
+            }))''', '''            "nb_starts_1h": sum(starts_1h[n] for n in nbs) if nbs else np.zeros(len(t), dtype=int),
+                "prev_duration_log": np.log1p(last_dur),
+            }))''')
+    rep('''    t = _ns(events.started_at)
+        per_region = {r: _intervals(alerts, r) for r in regions}
+        n_active = sum(_active_at(s, e, t).astype(int) for s, e in per_region.values())
+    
+        prev = np.full(len(events), np.nan)
+        for r, idx in events.groupby("region").indices.items():
+            a = alerts[alerts.region == r].sort_values("started_at")
+            s, dur = _ns(a.started_at), a.duration_min.to_numpy()
+            i = np.searchsorted(s, t[idx], side="left") - 1  # previous alert, started strictly before
+            ok = i >= 0
+            prev[idx[ok]] = dur[i[ok]]
+    ''', '''    t = _ns(events.started_at)
+        per_region = {r: _intervals(alerts, r) for r in regions}
+        active = {r: _active_at(s, e, t).astype(int) for r, (s, e) in per_region.items()}
+        n_active = sum(active.values())
+        national_1h = _count_between(np.sort(_ns(alerts.started_at)), t - HOUR, t)
+    
+        prev = np.full(len(events), np.nan)
+        starts_24h = np.zeros(len(events), dtype=int)
+        gap = np.full(len(events), float(MAX_GAP_MIN))
+        nb_frac = np.zeros(len(events))
+        for r, idx in events.groupby("region").indices.items():
+            a = alerts[alerts.region == r].sort_values("started_at")
+            s, dur = _ns(a.started_at), a.duration_min.to_numpy()
+            i = np.searchsorted(s, t[idx], side="left") - 1  # previous alert, started strictly before
+            ok = i >= 0
+            prev[idx[ok]] = dur[i[ok]]
+            starts_24h[idx] = _count_between(s, t[idx] - 24 * HOUR, t[idx])
+            ends = np.sort(per_region[r][1]) if r in per_region else np.array([], dtype=np.int64)
+            ends = ends[ends != np.iinfo(np.int64).max]
+            j = np.searchsorted(ends, t[idx], side="right") - 1
+            if len(ends):
+                gap[idx] = np.where(j >= 0, np.minimum((t[idx] - ends[np.maximum(j, 0)]) / 6e10, MAX_GAP_MIN), MAX_GAP_MIN)
+            nbs = [n for n in NEIGHBORS.get(r, []) if n in per_region]
+            if nbs:
+                nb_frac[idx] = sum(active[n][idx] for n in nbs) / len(nbs)
+    ''')
+    rep('''        "prev_duration_min": np.nan_to_num(prev, nan=20.0),
+        }, index=events.index)''', '''        "prev_duration_min": np.nan_to_num(prev, nan=20.0),
+            "national_starts_1h": national_1h,
+            "starts_24h": starts_24h,
+            "min_since_last_end": gap,
+            "nb_active_frac": nb_frac,
+        }, index=events.index)''')
+    p.write_text(s)
+    
+    p = Path("training/duration_model.py"); s = p.read_text()
+    rep('''NUMERIC = ["hour_sin", "hour_cos", "n_active_oblasts", "log_prev_duration"]''',
+        '''NUMERIC = ["hour_sin", "hour_cos", "n_active_oblasts", "log_prev_duration",
+               "log_national_starts_1h", "log_starts_24h", "log_min_since_last_end", "nb_active_frac"]''')
+    rep('''    X["log_prev_duration"] = np.log1p(feats.prev_duration_min)
+    ''', '''    X["log_prev_duration"] = np.log1p(feats.prev_duration_min)
+        X["log_national_starts_1h"] = np.log1p(feats.national_starts_1h)
+        X["log_starts_24h"] = np.log1p(feats.starts_24h)
+        X["log_min_since_last_end"] = np.log1p(feats.min_since_last_end)
+        X["nb_active_frac"] = feats.nb_active_frac.astype(float)
+    ''')
+    p.write_text(s)
+    EOF
+    grep -n "NUMERIC" training/*.py app/*.py tests/*.py
+[tool output]
+    training/duration_model.py:15:NUMERIC = ["hour_sin", "hour_cos", "n_active_oblasts", "log_prev_duration",
+[tool call: Bash]
+    SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad; cp models/metrics.json $SP/metrics_before.json; systemd-run --user --scope -q -p MemoryMax=3G env PYTHONPATH=. uv run pytest -q 2>&1 | tail -2; systemd-run --user --scope -q -p MemoryMax=3G uv run python -m training.train 2>&1 | grep -v -i warn | tail -45
+[tool output]
+    -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+    4 passed, 5 warnings in 34.97s
+    wandb:                  +25 ...
+    wandb: 
+    wandb: 🚀 View run silver-aardvark-10 at: https://wandb.ai/bhnyshchenko-kyiv-school-of-economics/air-raid-alerts/runs/j76qyis4
+    wandb: ⭐️ View project at: https://wandb.ai/bhnyshchenko-kyiv-school-of-economics/air-raid-alerts
+    wandb: Synced 5 W&B file(s), 3 media file(s), 6 artifact file(s) and 0 other file(s)
+    wandb: Find logs at: ./wandb/run-20261012_201427-j76qyis4/logs
+    data until 2026-10-12 04:59:03+00:00
+      train 2025-10-01 00:00:00+00:00 -> 2026-08-31 03:00:00+00:00
+      valid -> 2026-09-14 03:00:00+00:00
+      test  -> 2026-10-12 03:00:00+00:00
+      NOTE: weibull beats lognormal on validation {'lognormal': -4.337746545171339, 'weibull': -4.295134427847139, 'loglogistic': -4.325143345823717} - prediction code is lognormal-only
+      start_brier                    0.1499
+      start_logloss                  0.4546
+      start_roc_auc                  0.7836
+      start_pr_auc                   0.5292
+      start_baseline_brier           0.1684
+      start_baseline_logloss         0.5253
+      start_baseline_roc_auc         0.7304
+      start_baseline_pr_auc          0.4792
+      start_valid_brier              0.1418
+      start_valid_logloss            0.4341
+      start_valid_roc_auc            0.7840
+      start_valid_pr_auc             0.5173
+      start_best_rounds              285
+      start_train_rows               179654
+      start_test_rows                14155
+      start_test_pos_rate            0.2451
+      start_fit_seconds              4.7777
+      dur_mae_median_min             18.7603
+      dur_mae_baseline_min           19.5414
+      dur_medae_min                  9.5332
+      dur_coverage_80                0.8132
+      dur_c_index                    0.6193
+      dur_mean_log_lik               -4.2061
+      sigma                          1.0705
+      dur_valid_loglik_lognormal     -4.3377
+      dur_valid_loglik_weibull       -4.2951
+      dur_valid_loglik_loglogistic   -4.3251
+      dur_train_events               33246
+      dur_test_events                4021
+      dur_fit_seconds                7.4784
+      valid_start                    2026-08-31 03:00:00+00:00
+      test_start                     2026-09-14 03:00:00+00:00
+      test_end                       2026-10-12 03:00:00+00:00
+      data_until                     2026-10-12 04:59:03+00:00
+[tool call: Bash]
+    SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad; python3 -c "
+    import json
+    a=json.load(open('$SP/metrics_before.json'))['metrics']; b=json.load(open('models/metrics.json'))['metrics']
+    for k in ['start_logloss','start_brier','start_roc_auc','start_pr_auc','start_baseline_brier','start_baseline_roc_auc','start_baseline_pr_auc','dur_mean_log_lik','dur_mae_median_min','dur_medae_min','dur_mae_baseline_min','dur_coverage_80','dur_c_index','test_start','test_end']:
+        print(f'{k:24s} {a.get(k)!s:>22.22} {b.get(k)!s:>22.22}')
+    "
+[tool output]
+    start_logloss               0.46329023817413584     0.4545622614354403
+    start_brier                 0.15205192918711868    0.14985732928699846
+    start_roc_auc                0.7694500181738557     0.7835665343592699
+    start_pr_auc                 0.5203552375920583     0.5291999937732246
+    start_baseline_brier        0.16835923305093745    0.16835923305093745
+    start_baseline_roc_auc       0.7304468518711248     0.7304468518711248
+    start_baseline_pr_auc        0.4792458418720017     0.4792458418720017
+    dur_mean_log_lik             -4.239699268956702     -4.206066590680197
+    dur_mae_median_min            19.25153074075867      18.76025755486022
+    dur_medae_min                10.558442849808284      9.533183417662496
+    dur_mae_baseline_min         19.541426262123853     19.541426262123853
+    dur_coverage_80              0.8102462074110918     0.8132305396667495
+    dur_c_index                  0.6104020872654107       0.61930567007674
+    test_start               2026-09-14 03:00:00+00 2026-09-14 03:00:00+00
+    test_end                 2026-10-12 03:00:00+00 2026-10-12 03:00:00+00
+[tool call: Bash]
+    SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad; sed -n 81,125p app/server.py | grep -n "def \|params\|get(" ; (systemd-run --user --scope -q -p MemoryMax=3G uv run python -m app --port 8765 > $SP/srv.log 2>&1 &); for i in $(seq 30); do curl -sf localhost:8765/api/meta -o $SP/meta.json && break; sleep 1; done; T=$(python3 -c "import json; print(json.load(open('$SP/meta.json'))['times'][-30])"); for u in "/api/replay?i=100" "/api/glance?t=$T&period=today&live=false" "/api/now"; do echo "== $u"; curl -s -m 120 -G "localhost:8765${u%%\?*}" $(echo "${u#*\?}" | tr '&' '\n' | sed 's/^/--data-urlencode /' | tr '\n' ' ') | head -c 300; echo; done; grep -i -E "error|traceback" $SP/srv.log | head; pkill -f "app --port 876[5]"
+[tool error]
+    Exit code 144
+    23:@app.get("/api/region")
+    24:def region_history(region: str, t: str, live: bool = False):
+    41:@app.get("/api/glance")
+    42:def glance(t: str, period: str = "today", live: bool = False):
+    == /api/replay?i=100
+    {"detail":[{"type":"missing","loc":["query","t"],"msg":"Field required","input":null}]}
+    == /api/glance?t=2026-10-10T22:00:00+00:00&period=today&live=false
+    {"period":"today","start":"2026-10-10T21:00:00+00:00","end":"2026-10-10T22:00:00+00:00","data_until":null,"alerts_started":14,"alert_hours":3.8,"oblasts_affected":11,"oblasts_total":24,"median_duration_min":14.933333333333334,"longest":{"region":"Kharkivska oblast","minutes":34.43333333333333,"ongoi
+    == /api/now
+    {"t":"2026-10-12T17:15:00+00:00","mode":"now","history_until":"2026-10-12T04:59:03+00:00","live_source":"https://ubilling.net.ua/aerialalerts/","live_error":null,"regions":[{"region":"Cherkaska oblast","p_start":null,"active":true,"duration":{"elapsed_min":0.0,"median_min":52.07868947941101,"p10_min
+[tool call: Bash]
+    SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad; (systemd-run --user --scope -q -p MemoryMax=3G uv run python -m app --port 8765 > $SP/srv.log 2>&1 &); for i in $(seq 30); do curl -sf localhost:8765/api/meta -o $SP/meta.json && break; sleep 1; done; T=$(python3 -c "import json; print(json.load(open('$SP/meta.json'))['times'][-30])"); curl -s -G localhost:8765/api/replay --data-urlencode "t=$T" | python3 -c "
+    import json,sys; d=json.load(sys.stdin); r=d['regions']; print(len(r), 'regions'); print([ (x['region'][:8], x.get('p_start') and round(x['p_start'],3), x.get('duration') and round(x['duration']['median_min'],1)) for x in r[:8]])"; curl -s -G localhost:8765/api/region --data-urlencode "t=$T" --data-urlencode "region=Kyiv City" | head -c 150; echo; grep -i -E "error|traceback" $SP/srv.log | head -3; pkill -f "app --port 876[5]"; true
+[tool error]
+    Exit code 144
+    24 regions
+    [('Cherkask', 0.095, None), ('Chernihi', 0.2, None), ('Chernive', 0.111, None), ('Dniprope', 0.413, None), ('Donetska', 0.053, None), ('Ivano-Fr', 0.117, None), ('Kharkivs', 0.417, None), ('Khersons', 0.332, None)]
+    {"series":{"t":["2026-09-14T03:00:00+00:00","2026-09-14T04:00:00+00:00","2026-09-14T05:00:00+00:00","2026-09-14T06:00:00+00:00","2026-09-14T07:00:00+0
+[tool call: Bash]
+    python3 - <<'EOF'
+    from pathlib import Path
+    p = Path("README.md"); s = p.read_text()
+    for a, b in [("| Start: Brier ↓ | 0.152 | 0.168 |", "| Start: Brier ↓ | 0.150 | 0.168 |"),
+                 ("| Start: ROC-AUC ↑ | 0.770 | 0.730 |", "| Start: ROC-AUC ↑ | 0.784 | 0.730 |"),
+                 ("| Start: PR-AUC ↑ | 0.520 | 0.479 |", "| Start: PR-AUC ↑ | 0.529 | 0.479 |"),
+                 ("| Duration: MAE of median ↓ | 19.3 min | 19.5 min |", "| Duration: MAE of median ↓ | 18.8 min | 19.5 min |")]:
+        assert s.count(a) == 1, a; s = s.replace(a, b)
+    a = "## Layout"
+    s = s.replace(a, """Feature selection (validation only, two different 14-day windows, 90% bootstrap intervals by day: `exploration/05_feature_ideas.py`):
+    - Start model: adding the duration of the oblast's last finished alert (`prev_duration_log`) lowers validation log loss by about 0.004 in both windows. Seven other candidates did nothing.
+    - Duration model: national starts in the last hour, the oblast's starts in the last 24 h, time since its last alert, and the share of neighbours on alert raise validation log-likelihood by about 0.025 together.
+    - Rejected: weather (`exploration/03_*`, `04_*`), and counting oblasts on alert 5 min after the start (it requires issuing the forecast 5 min later, and was slightly worse).
+    
+    """ + a, 1)
+    p.write_text(s)
+    
+    p = Path("CLAUDE.md"); s = p.read_text()
+    a = "- **Model 2** (`duration_model.py`): lifelines log-normal AFT."
+    assert s.count(a) == 1
+    s = s.replace(a, "- Feature candidates for both models are scored by `exploration/05_feature_ideas.py` (validation only; `--shift 14` re-runs on the previous fortnight; Δ comes with a day-block bootstrap CI). Adopt a feature only if it wins in both windows. Seed-to-seed noise of the start model is ~0.0001 log loss, but day-to-day sampling noise is ~0.001–0.002.\n" + a, 1)
+    a = "Only its coefficients are exported"
+    s = s.replace(a, "Inputs: region, hour, n_active_oblasts, previous duration, national starts 1 h, oblast starts 24 h, time since the last alert, neighbours on alert (log1p transforms in `design_matrix`). " + a, 1)
+    p.write_text(s)
+    EOF
+    git status --short
+[tool output]
+    ?? .gitignore
+    ?? CLAUDE.md
+    ?? README.md
+    ?? app/
+    ?? exploration/
+    ?? history-1-setup-and-mvp.txt
+    ?? models/
+    ?? pyproject.toml
+    ?? tests/
+    ?? training/
+    ?? uv.lock
+
+==== CLAUDE (2026-10-12 17:15:39 UTC) ====
+I tested your three ideas plus 12 of my own, and added the five features that held up to the main pipeline. Both models improved on the test period; nothing is committed yet.
+
+**How I tested:** each feature was added to the current set on its own and scored on validation only. I repeated everything on a second, earlier 14-day window, with intervals that resample whole days (alerts come in waves). A feature had to win in both windows to be adopted. The script is `exploration/05_feature_ideas.py`.
+
+**Your ideas:**
+- **Counting oblasts on alert 5 min after the start:** rejected. It was slightly worse in both windows (−0.004 and −0.002 log-likelihood). It would also force the forecast to be issued 5 minutes into the alert, and 11% of alerts are already over by then. Starts are often staggered (39% of alerts have another oblast starting within 5 min), but `n_active_oblasts` and "national starts in the last hour" already capture that.
+- **Neighbours on alert in the duration model:** adopted. Alone it's a small gain, but it adds a little on top of the other new features in both windows.
+- **Previous alert duration:** the duration model already had it. Added to the **start model** (as `prev_duration_log`), it was the only start feature that clearly helped, in both windows.
+
+**Adopted:**
+- Start model: `prev_duration_log`. The seven other candidates I tried did nothing, so I kept it simple.
+- Duration model: `national_starts_1h`, `starts_24h` (in this oblast), time since this oblast's last alert, and `nb_active_frac`. Together they raise validation log-likelihood by about 0.025 in both windows.
+
+**Test period (14 Sep – 12 Oct, scored once, after retraining):**
+
+| | Before | After | Baseline |
+|---|---|---|---|
+| Start: log loss ↓ | 0.463 | **0.455** | 0.525 |
+| Start: ROC-AUC ↑ | 0.769 | **0.784** | 0.730 |
+| Start: PR-AUC ↑ | 0.520 | **0.529** | 0.479 |
+| Duration: log-likelihood ↑ | −4.240 | **−4.206** | – |
+| Duration: MAE of median ↓ | 19.3 min | **18.8 min** | 19.5 min |
+| Duration: 80% interval coverage | 81.0% | 81.3% | – |
+
+The duration model is now clearly better than the per-oblast median baseline. Before this change it was barely better.
+
+**Checks:**
+- The leakage tests pass (4/4), and they now cover the new features.
+- The training pipeline reproduces the experiment's validation numbers.
+- The dashboard works in replay, region, glance and Now mode.
+- Training logged a new W&B run (`silver-aardvark-10`). README results and CLAUDE.md are updated.
+
+Training on validation still prefers a Weibull distribution over log-normal for durations, as before. Switching would need new prediction code.
+
+==== USER  (2026-10-12 17:18:47 UTC) ====
+/export
+

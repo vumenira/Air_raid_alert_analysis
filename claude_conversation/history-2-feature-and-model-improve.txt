@@ -1,0 +1,1049 @@
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Opus 5.5 · Claude API
+ ▝▝   ▝▝   ~/projects/Air_raid_alert_analysis
+
+
+❯ /clear                                                                        
+
+❯ Hello, I'm working on a project that does the analytics about air raid alerts 
+  in Ukraine reads the @README.md and @CLAUDE.md to get some context.           
+    what I want from you is to do a couple of fixes for the UI and some         
+  architectural changes for the model.                                          
+    In the UI on the bottom panel, there is three buttons, day, week, and       
+  model. Delete the model one, it's useless for me. I don't want to show the    
+  model metrics on the site. They're already showed WandB                       
+    About the model architecture, I would like you to research and find if      
+  there is a possibility to add a new feature for the model, a weather in       
+  Oblast at a particular time and uh, date. I believe this feature would be     
+  very useful for predicting whether there will be an air alert or not. And     
+  also I have a couple of questions I want you to tell me more about the model  
+  that we use for predicting how much time left till the end of the current     
+  alert. I want you to tell me about the pros and cons of using LSTM for        
+  predicting the probability of alert starting right now. And I want you to     
+  propose alternatives to it because I feel like using LSTM for a time series   
+  task is not optimal and there should be other better approaches. Keep in mind 
+  that we have very little compute and I would like to keep that training as    
+  fast as possible.                                                             
+  ⎿  Read README.md (57 lines)
+  ⎿  Read CLAUDE.md (49 lines)
+
+  Listed 1 directory, ran 2 shell commands (ctrl+o to expand)
+
+● Quick correction: the start model is actually LightGBM (gradient-boosted
+  trees) on hourly features, not an LSTM—I'll still address the LSTM question
+  afterward. First, let me fix the UI.
+
+● Bash(python3 - <<'EOF'
+      import re, pathlib…)
+  ⎿  43:        "metrics": json.loads((MODELS_DIR / "metrics.json").read_te
+     xt()),
+     44:- Dashboard: `uv run python -m app [--port 8000]`. The bottom row h
+     … +3 lines (ctrl+o to expand)
+  ⎿  Updated CLAUDE.md (+1 -1)
+      41  
+      42  The venv uses Python 3.13 (`requires-python >= 3.12`), managed 
+          by `uv`.
+      43  - Train: `uv run python -m training.train [--refresh] [--no-wan
+          db]` (~20 s). W&B reads `WANDB_API_KEY` from `.env` via python-
+          dotenv. The file uses `KEY = value` with spaces, so don't `sour
+          ce` it.
+      44 -- Dashboard: `uv run python -m app [--port 8000]`. The bottom r
+         -ow has Today / Last 7 days tabs (`/api/glance`, computed only f
+         -rom alerts known at the selected time) and a Model tab.        
+      44 +- Dashboard: `uv run python -m app [--port 8000]`. The bottom r
+         +ow has Today / Last 7 days tabs (`/api/glance`, computed only f
+         +rom alerts known at the selected time). Model metrics live in W
+         +&B and `models/metrics.json`, not in the UI.                   
+      45  - Feature ablation (validation only): `PYTHONPATH=. uv run pyth
+          on exploration/02_feature_ablation.py [--wandb]`
+      46  - Tests: `uv run pytest`; single test: `uv run pytest tests/tes
+          t_no_leakage.py::test_start_features_use_only_past`
+      47  - Rebuild map file: `uv run python -m app.prepare_geojson`
+  ⎿  Updated app/server.py (+1 -3)
+      66  @app.get("/api/meta")
+      67  def meta():
+      68      a = artifacts()
+      69 -    r, m = a["replay"], a["metrics"]                           
+      69 +    r = a["replay"]                                            
+      70      national = r.groupby("t").agg(starts=("y", "sum"), active=(
+          "active_now", "sum"), p_sum=("p_start", "sum"))  # NaN skipped
+      71      return {
+      72          "regions": [{"region": x, "label": LABELS[x]} for x in 
+          a["regions"]],
+      73          "times": [t.isoformat() for t in a["times"]],
+      74 -        "metrics": m["metrics"], "calibration": m["calibration"
+         -], "importance": m["importance"],                              
+      75 -        "curves": m.get("curves", []),                         
+      74          "national": {"t": [t.isoformat() for t in national.inde
+          x], **{c: national[c].round(2).tolist() for c in national}},
+      75          "curve_grid": CURVE_GRID.tolist(),
+      76      }
+  ⎿  Updated app/static/app.js (+3 -75)
+      244      .on("click", (ev) => onClick && onClick(bis(ts, x.invert(d
+           3.pointer(ev)[0]))));
+      245  }
+      246  
+      247 -/* ---------- bottom row: Today / Last 7 days / Model --------
+          --- */                                                         
+      247 +/* ---------- bottom row: Today / Last 7 days ---------- */   
+      248  const tile = (k, v, d = "", cls = "") => `<div class="kpi"><sp
+           an class="k">${k}</span><span class="v">${v}</span><span class
+           ="d ${cls}">${d}</span></div>`;
+      249  const cards = () => [1, 2, 3].map((i) => ({ head: $(`c${i}-hea
+           d`), el: $(`c${i}`) }));
+      250 -const FEATURE_NAMES = { region: "Oblast", hour_kyiv: "Hour of 
+          -day", dow_kyiv: "Day of week", min_since_last_end: "Time since
+          - last alert",                                                 
+      251 -  starts_24h: "Alerts last 24 h", starts_7d: "Alerts last 7 d"
+          -, n_active_oblasts: "Oblasts on alert now", national_starts_1h
+          -: "National starts 1 h",                                      
+      252 -  nb_active_frac: "Neighbours on alert", nb_starts_1h: "Neighb
+          -our starts 1 h" };                                            
+      253 -                                                              
+      250  function setView(v) {
+      251    state.view = v;
+      252    document.querySelectorAll("#bottom-tabs .seg").forEach((b) =
+           > b.classList.toggle("active", b.dataset.view === v));
+     ...
+      256  let bottomSeq = 0;
+      257  async function renderBottom() {
+      258    const seq = ++bottomSeq;
+      263 -  if (state.view === "model") return renderModelView();       
+      259    if (!state.snap) return;
+      260    const live = state.mode === "now";
+      261    const period = state.view === "today" ? "today" : "week";
+     ...
+      291    drawColumns(c3.el, g.durations);
+      292  }
+      293  
+      299 -function renderModelView() {                                  
+      300 -  const m = state.meta.metrics;                               
+      301 -  const [c1, c2, c3] = cards();                               
+      302 -  $("glance-note").textContent = `test period ${fmtShort.forma
+          -t(new Date(m.test_start))} – ${fmtShort.format(new Date(m.test
+          -_end))}`;                                                     
+      303 -  const rel = (a, b, lowerBetter) => {                        
+      304 -    const diff = ((a - b) / b) * 100, better = lowerBetter ? d
+          -iff < 0 : diff > 0;                                           
+      305 -    return [`${diff > 0 ? "+" : ""}${diff.toFixed(1)}% vs base
+          -line ${b.toFixed(3)}`, better ? "better" : "worse"];          
+      306 -  };                                                          
+      307 -  const [bd, bc] = rel(m.start_brier, m.start_baseline_brier, 
+          -true);                                                        
+      308 -  const [ad, ac] = rel(m.start_roc_auc, m.start_baseline_roc_a
+          -uc, false);                                                   
+      309 -  const [pd_, pc] = rel(m.start_pr_auc, m.start_baseline_pr_au
+          -c, false);                                                    
+      310 -  const [md, mc] = rel(m.dur_mae_median_min, m.dur_mae_baselin
+          -e_min, true);                                                 
+      311 -  $("kpis").innerHTML =                                       
+      312 -    tile("Start · Brier", m.start_brier.toFixed(3), bd, bc) + 
+      313 -    tile("Start · ROC-AUC", m.start_roc_auc.toFixed(3), ad, ac
+          -) +                                                           
+      314 -    tile("Start · PR-AUC", m.start_pr_auc.toFixed(3), pd_, pc)
+          - +                                                            
+     … 76 more lines (ctrl+o to expand)
+  ⎿  Updated app/static/index.html (+0 -1)
+      57          <div class="mode tabs" id="bottom-tabs">
+      58            <button class="seg active" data-view="today">Today</b
+          utton>
+      59            <button class="seg" data-view="week">Last 7 days</but
+          ton>
+      60 -          <button class="seg" data-view="model">Model</button> 
+      60          </div>
+      61          <span id="glance-note" class="muted small"></span>
+      62        </div>
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● The Model tab is removed. Now I'm deleting the server's now-unused metrics
+  loading, then testing the app.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● node isn't installed, so the chain stopped before the server started. I'll run
+  the steps one at a time.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Tests pass and the endpoints work. Exit code 144 only means pkill matched its
+  own shell. There's no node for a JS syntax check, so I'll read over the edited
+  spots by eye:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Bash(sed -i 's/^const cards = () => \(.*\)$/const cards = () => \1\n/'
+      app/static/app.js && SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-
+      alert-analysis/94a6b…)
+  ⎿  None None 9024 2025-10-01T00:00 2026-10-11T23:00 {'cloud_cover': 0, 'w
+     ind_speed_10m': 0, 'precipitation': 0, 'visibility': 0}
+     None None 9024 2025-10-01T00:00 2026-10-11T23:00 {'cloud_cover': 0, 'w
+     … +4 lines (ctrl+o to expand)
+  ⎿  Updated app/static/app.js (+1 -0)
+      247  /* ---------- bottom row: Today / Last 7 days ---------- */
+      248  const tile = (k, v, d = "", cls = "") => `<div class="kpi"><sp
+           an class="k">${k}</span><span class="v">${v}</span><span class
+           ="d ${cls}">${d}</span></div>`;
+      249  const cards = () => [1, 2, 3].map((i) => ({ head: $(`c${i}-hea
+           d`), el: $(`c${i}`) }));
+      250 +                                                              
+      251  function setView(v) {
+      252    state.view = v;
+      253    document.querySelectorAll("#bottom-tabs .seg").forEach((b) =
+           > b.classList.toggle("active", b.dataset.view === v));
+
+● The Open-Meteo historical-forecast API needs no key and gives full hourly
+  coverage for the training window. Now I'll check the ablation script's
+  grid-building logic to test whether weather actually improves validation
+  performance.
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+❯ It seems that you've been interrupted by a crash of my system. You can        
+  continue the work. And you're right, we use lightgbm, I just confused myself  
+  with those names.                                                             
+
+● Picking up where it stopped. One note first: my last command (the weather
+  ablation) exited with 137 (SIGKILL), which usually means the OOM killer. So my
+  script may have caused or contributed to your system crash. I'll check memory
+  and the state of things before I run anything heavy again.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The UI edits persisted, but the scratchpad and kernel logs got wiped by the
+  reboot, so I can't confirm the crash's cause. Given the 7.6 GB RAM available,
+  I'll cap memory at 3 GB this time to prevent another full system crash,
+  starting with measuring the baseline feature build.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The baseline feature build only peaks around 260 MB, so the earlier SIGKILL
+  was likely from the system crash rather than this workload. I'll keep the 3 GB
+  cap in place and recreate the weather ablation script.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Weather at the target oblast's centroid doesn't help once alert-history
+  features are included, since those already capture the signal. I'll instead
+  test weather at the actual drone launch sites (Kursk, Bryansk, Oryol,
+  Primorsko-Akhtarsk, Crimea), averaged over the prior 6 hours, since that's
+  where launch conditions actually matter.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Weather correlates with activity over a 6h window but doesn't improve the
+  1-hour model, since history features already capture that signal more
+  directly. I'll save both experiments to exploration/ for reproducibility, then
+  move on to the duration model.
+
+● Bash(SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b
+      5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad; cd
+      /home/vumenira/projects/Air_raid_alert_a…)
+  ⎿  01_data_profile.py
+     02_feature_ablation.py
+     ==> exploration/03_weather_oblast.py <==
+     … +133 lines (ctrl+o to expand)
+  ⎿  Created exploration/03_weather_oblast.py (+55 -0)
+       1 +"""does weather at the oblast centroid help the start model on 
+         +VALIDATION? (test untouched)"""                                
+       2 +                                                               
+       3 +Usage: PYTHONPATH=. uv run python exploration/03_weather_oblast
+         +.py   (Open-Meteo historical-forecast API, no key)             
+       4 +Result 2026-10-12: valid logloss 0.4385 -> 0.4393 with weather;
+         + no gain, weather not added to the model.                      
+       5 +import json, urllib.request                                    
+       6 +from pathlib import Path                                       
+       7 +import pandas as pd                                            
+       8 +from training import start_model                               
+       9 +from training.data import ROOT, TRAIN_START, load_alerts, regio
+         +ns                                                             
+      10 +from training.features import START_FEATURES                   
+      11 +from training.train import split_times, start_feature_frame    
+      12 +from training.build_neighbors import vertices                  
+      13 +                                                               
+      14 +CACHE = ROOT / "data" / "weather.parquet"  # gitignored        
+      15 +VARS = ["cloud_cover", "precipitation", "wind_speed_10m", "visi
+         +bility", "temperature_2m"]                                     
+      16 +                                                               
+      17 +def fetch(regs, end):                                          
+      18 +    if CACHE.exists():                                         
+      19 +        return pd.read_parquet(CACHE)                          
+      20 +    g = json.loads((ROOT / "app/static/oblasts.geojson").read_t
+         +ext())                                                         
+      21 +    cent = {f["properties"]["region"]: vertices(f["geometry"]).
+         +mean(0) for f in g["features"]}                                
+      22 +    lat = ",".join(f"{cent[r][1]:.3f}" for r in regs); lon = ",
+         +".join(f"{cent[r][0]:.3f}" for r in regs)                      
+      23 +    url = ("https://historical-forecast-api.open-meteo.com/v1/f
+         +orecast?latitude=" + lat + "&longitude=" + lon +               
+      24 +           f"&start_date={TRAIN_START:%Y-%m-%d}&end_date={end:%
+         +Y-%m-%d}&hourly={','.join(VARS)}&timezone=UTC")                
+      25 +    data = json.loads(urllib.request.urlopen(url, timeout=120).
+         +read())                                                        
+      26 +    df = pd.concat([pd.DataFrame(d["hourly"]).assign(region=r) 
+         +for r, d in zip(regs, data)])                                  
+      27 +    df["t"] = pd.to_datetime(df.time, utc=True); df = df.drop(c
+         +olumns="time")                                                 
+      28 +    df.to_parquet(CACHE); return df                            
+      29 +                                                               
+      30 +alerts = load_alerts(); regs = [str(r) for r in regions(alerts)
+         +]                                                              
+      31 +valid_start, test_start, grid_end = split_times(alerts)        
+      32 +feats, y = start_feature_frame(alerts, regions(alerts), grid_en
+         +d)                                                             
+      33 +wx = fetch(regs, grid_end).rename(columns={v: "wx_" + v for v i
+         +n VARS})                                                       
+      34 +print("weather rows", len(wx), "missing", wx.filter(like="wx_")
+         +.isna().mean().round(4).to_dict())                             
+      35 +key = pd.MultiIndex.from_arrays([feats.region.astype(str), feat
+         +s.t])                                                          
+      36 +wxi = wx.set_index(["region", "t"]).reindex(key)               
+      37 +f2 = feats.copy()                                              
+      38 +for c in wxi: f2[c] = wxi[c].to_numpy()                        
+      39 +calm = (f2.active_now == 0).to_numpy()                         
+      40 +tr = (f2.t < valid_start).to_numpy() & calm                    
+     … 15 more lines (ctrl+o to expand)
+  ⎿  Created exploration/04_weather_launch_sites.py (+47 -0)
+       1 +"""weather at drone LAUNCH areas (national features, trailing 6
+         +h mean), validation only."""                                   
+       2 +                                                               
+       3 +Usage: PYTHONPATH=. uv run python exploration/04_weather_launch
+         +_sites.py                                                      
+       4 +Result 2026-10-12: real correlation (visibility rho=+0.27, clou
+         +d cover -0.28 vs national starts next 6h)                      
+       5 +but valid logloss 0.4385 -> 0.4392 at the 1h horizon: redundant
+         + with recent-alert features.                                   
+       6 +import json, urllib.request                                    
+       7 +from pathlib import Path                                       
+       8 +import pandas as pd                                            
+       9 +from training import start_model                               
+      10 +from training.data import ROOT, TRAIN_START, load_alerts, regio
+         +ns                                                             
+      11 +from training.features import START_FEATURES                   
+      12 +from training.train import split_times, start_feature_frame    
+      13 +                                                               
+      14 +SITES = {"kursk": (51.75, 36.30), "bryansk": (53.10, 34.00), "o
+         +ryol": (52.95, 36.05),                                         
+      15 +         "primorsko": (46.05, 38.17), "crimea": (45.10, 33.90)}
+      16 +VARS = ["cloud_cover", "precipitation", "wind_speed_10m", "wind
+         +_gusts_10m", "visibility"]                                     
+      17 +CACHE = ROOT / "data" / "launch_wx.parquet"  # gitignored      
+      18 +                                                               
+      19 +alerts = load_alerts(); regs = regions(alerts)                 
+      20 +valid_start, test_start, grid_end = split_times(alerts)        
+      21 +feats, y = start_feature_frame(alerts, regs, grid_end)         
+      22 +if not CACHE.exists():                                         
+      23 +    url = ("https://historical-forecast-api.open-meteo.com/v1/f
+         +orecast?latitude=" + ",".join(str(a) for a, _ in SITES.values()
+         +) +                                                            
+      24 +           "&longitude=" + ",".join(str(b) for _, b in SITES.va
+         +lues()) +                                                      
+      25 +           f"&start_date={TRAIN_START:%Y-%m-%d}&end_date={grid_
+         +end:%Y-%m-%d}&hourly={','.join(VARS)}&timezone=UTC")           
+      26 +    data = json.loads(urllib.request.urlopen(url, timeout=120).
+         +read())                                                        
+      27 +    pd.concat([pd.DataFrame(d["hourly"]).assign(site=s) for s, 
+         +d in zip(SITES, data)]).to_parquet(CACHE)                      
+      28 +raw = pd.read_parquet(CACHE); raw["t"] = pd.to_datetime(raw.tim
+         +e, utc=True)                                                   
+      29 +wide = raw.pivot(index="t", columns="site", values=VARS)       
+      30 +# Strictly past: mean over hours [t-6h, t-1h]; values are archi
+         +ved *forecasts* for those hours, so known before t.            
+      31 +past = wide.shift(1).rolling(6, min_periods=1).mean()          
+      32 +agg = pd.DataFrame({f"lw_{v}_mean": past[v].mean(axis=1) for v 
+         +in VARS})                                                      
+      33 +agg["lw_precip_max"] = past["precipitation"].max(axis=1); agg["
+         +lw_gust_max"] = past["wind_gusts_10m"].max(axis=1)             
+      34 +LW = list(agg)                                                 
+      35 +f2 = feats.join(agg, on="t")                                   
+      36 +print("missing:", f2[LW].isna().mean().max().round(4))         
+      37 +calm = (f2.active_now == 0).to_numpy()                         
+      38 +tr = (f2.t < valid_start).to_numpy() & calm                    
+      39 +va = ((f2.t >= valid_start) & (f2.t < test_start)).to_numpy() &
+         + calm                                                          
+      40 +for name, fs in {"current": START_FEATURES, "+launch weather": 
+         +START_FEATURES + LW}.items():                                  
+     … 7 more lines (ctrl+o to expand)
+
+● My docstring insert landed after the closing """, which broke the syntax.
+  Fixing:
+
+● Bash(python3 - <<'EOF'
+      from pathlib import Path…)
+  ⎿  """Weather at drone LAUNCH areas (national features, trailing 6h mean)
+     , validation only.
+     … +18 lines (ctrl+o to expand)
+  ⎿  Updated exploration/03_weather_oblast.py (+2 -1)
+      1 -"""does weather at the oblast centroid help the start model on V
+        -ALIDATION? (test untouched)"""                                  
+      1 +"""Does weather at the oblast centroid help the start model on V
+        +ALIDATION? (test untouched)                                     
+      2  
+      3  Usage: PYTHONPATH=. uv run python exploration/03_weather_oblast.
+         py   (Open-Meteo historical-forecast API, no key)
+      4  Result 2026-10-12: valid logloss 0.4385 -> 0.4393 with weather; 
+         no gain, weather not added to the model.
+      5 +"""                                                             
+      6  import json, urllib.request
+      7  from pathlib import Path
+      8  import pandas as pd
+  ⎿  Updated exploration/04_weather_launch_sites.py (+2 -1)
+      1 -"""weather at drone LAUNCH areas (national features, trailing 6h
+        - mean), validation only."""                                     
+      1 +"""Weather at drone LAUNCH areas (national features, trailing 6h
+        + mean), validation only.                                        
+      2  
+      3  Usage: PYTHONPATH=. uv run python exploration/04_weather_launch_
+         sites.py
+      4  Result 2026-10-12: real correlation (visibility rho=+0.27, cloud
+          cover -0.28 vs national starts next 6h)
+      5  but valid logloss 0.4385 -> 0.4392 at the 1h horizon: redundant 
+         with recent-alert features.
+      6 +"""                                                             
+      7  import json, urllib.request
+      8  from pathlib import Path
+      9  import pandas as pd
+
+● Both experiments reproduce exactly. I'll add a note to CLAUDE.md so future
+  sessions don't retry this:
+● Bash(python3 - <<'EOF'
+      from pathlib import Path…)
+  ⎿  35:- Weather was tested and rejected for the start model (validation o
+     nly, 2026-
+  ⎿  Updated CLAUDE.md (+1 -0)
+      32  - **Model 1** (`start_model.py`): LightGBM on an hourly (oblast
+           × hour) grid, **calm oblast-hours only** (while an alert is ac
+          tive the UI shows the duration model's expected end instead). L
+          abel: an alert starts in `[t, t+1h)`. The split is train → 14-d
+          ay validation (early stopping; per-round curves go to W&B and t
+          o `metrics.json["curves"]`) → 28-day test. The final model is r
+          efit on train+valid with the best round count.
+      33  - Neighbour features use `training/neighbors.json`, generated f
+          rom the map polygons by `training/build_neighbors.py`. Odesa↔Kh
+          erson is an edge across the estuary, not a land border.
+      34  - Raw `hour_kyiv`/`dow_kyiv` beat sin/cos encoding for LightGBM
+           on validation (see `exploration/02_feature_ablation.py`); the 
+          sin/cos columns exist but aren't model inputs. `num_threads=4`:
+           8 threads crawl on this 4-core laptop when the CPU is busy.
+      35 +- Weather was tested and rejected for the start model (validati
+         +on only, 2026-10-12): Open-Meteo *historical-forecast* API (no 
+         +key, leakage-safe because it stores archived forecasts) at obla
+         +st centroids (`exploration/03_weather_oblast.py`) and at drone 
+         +launch areas (`exploration/04_weather_launch_sites.py`). Launch
+         +-area visibility/cloud correlate with national activity (|ρ|≈0.
+         +27), but log loss doesn't improve at the 1 h horizon. Revisit o
+         +nly for longer horizons (6–24 h).                              
+      36  - **Model 2** (`duration_model.py`): lifelines log-normal AFT. 
+          Only its coefficients are exported to `models/duration_model.js
+          on`, and prediction (quantiles and survival curves conditioned 
+          on elapsed time) is closed-form numpy/scipy, checked against li
+          felines at train time.
+      37  - `app/server.py` (FastAPI) imports `training.features` so live
+           predictions use the same feature code. Replay mode reads `mode
+          ls/replay_*.parquet`. Now mode re-downloads the CSV (at most ho
+          urly) and overrides `active_now` / `n_active_oblasts` with the 
+          live ubilling feed.
+      38  - `app/static/` is a no-build dashboard (d3 v7 from cdnjs). The
+           map uses a planar `geoTransform` (x·cos 48.5°), because geoBou
+          ndaries polygon winding breaks d3's spherical projections.
+
+● I removed the Model tab, and I tested weather on real data: it doesn't make
+  the model better, so I didn't add it. Your questions are answered below.
+
+  1. UI: Model tab removed
+
+  - I removed the button from app/static/index.html, and from app/static/app.js
+    the code that drew it (renderModelView, the calibration chart, the
+    training-curve chart and the feature-name table).
+  - /api/meta in app/server.py no longer sends metrics, calibration, importance
+    or curves, and the server no longer loads metrics.json. train.py still
+    writes that file, and the metrics still go to W&B.
+  - Checks: pytest passes (4 tests), and the endpoints and the page work with
+    only Today and Last 7 days. node isn't installed, so I couldn't run a JS
+    syntax check. I read the edited spots instead, but please open the dashboard
+    once to confirm.
+
+  2. Weather as a feature
+
+  Getting the data is easy. The Open-Meteo historical-forecast API needs no key
+  and has full hourly data from Oct 2025. It stores the forecasts as they were
+  issued, so the model only uses weather that was known before time t. That
+  keeps it leakage-safe.
+
+  I scored two versions on the validation window only (the test period wasn't
+  touched):
+
+  ┌───────────────────────────────────────────┬─────────┬─────────┬────────┐
+  │                  Variant                  │  Log    │ ROC-AUC │ PR-AUC │
+  │                                           │ loss ↓  │    ↑    │    ↑   │
+  ├───────────────────────────────────────────┼─────────┼─────────┼────────┤
+  │ Current model                             │ 0.4385  │ 0.7766  │ 0.5128 │
+  ├───────────────────────────────────────────┼─────────┼─────────┼────────┤
+  │ + weather at each oblast's centre         │ 0.4393  │ 0.7758  │ 0.5117 │
+  ├───────────────────────────────────────────┼─────────┼─────────┼────────┤
+  │ + weather at drone launch areas (Kursk,   │         │         │        │
+  │ Bryansk, Oryol, Primorsko-Akhtarsk,       │ 0.4392  │ 0.7757  │ 0.5112 │
+  │ Crimea), average of last 6 h              │         │         │        │
+  └───────────────────────────────────────────┴─────────┴─────────┴────────┘
+
+  Weather is linked to attacks: clearer skies at the launch areas go with more
+  alerts in the next 6 hours (correlation about 0.27). But the model doesn't
+  improve, because at a 1-hour horizon the drones are usually already flying.
+  The features "alerts started in the last hour" and "neighbours on alert" pick
+  that up more directly than the weather does.
+
+  So I didn't add weather to the model. Both experiments are saved as
+  exploration/03_weather_oblast.py and 04_weather_launch_sites.py, and I added a
+  note to CLAUDE.md. Weather might help a longer forecast, such as "chance of
+  an alert tonight" (6–24 h ahead).
+
+  3. The duration model (training/duration_model.py)
+
+  - Approach: it's a log-normal survival model (lifelines' log-normal AFT). It
+    treats the log of the alert's duration as a normal distribution. The centre
+    of that distribution depends on the oblast, the hour of day, how many
+    oblasts are on alert, and how long the previous alert in that oblast lasted.
+    The spread is the same for every alert.
+  - Why it suits the task: it predicts a full range of durations, not just one
+    number. The dashboard shows the median and a 10–90% range, and updates the
+    estimate as the alert goes on. For example, "it has lasted 40 min, so the
+    median end is now X". All of this is a few lines of numpy/scipy, and
+    training takes seconds.
+  - Test results: the error of the median is 19.3 min, against 19.5 min for the
+    per-oblast median, so it's barely better as a single number. The 80% range
+    contains the real duration 81% of the time, which is the useful part.
+  - Weaknesses:
+    - The spread is the same for every alert, but a lone-drone alert and a
+      massive missile attack really do differ in how uncertain they are.
+    - A Weibull distribution fit the validation data slightly better, but the
+      prediction code only supports log-normal.
+    - In Now mode the live feed doesn't give the alert's start time, so the
+      forecast can't account for how long the alert has already lasted.
+
+  4. LSTM vs. what you have (LightGBM)
+
+  What an LSTM would add: it learns patterns over time from raw sequences
+  without hand-made features. It can also model all oblasts together and capture
+  how attack waves build up.
+
+  Why it's a poor fit here:
+  - Too little data: the data has about 9k hours × 24 oblasts, and positive
+    hours are rare. Neural networks overfit on that much, while gradient-boosted
+    trees do well.
+  - Compute: an LSTM is slow to train on a 4-core CPU, needs tuning, and gives
+    different results from run to run. LightGBM trains in about 20 s.
+  - Leakage risk: your current features have tests proving they only use data
+    available at time t. Sequence windows are much easier to get wrong.
+  - Recent evidence: on tabular and event-count data like this, boosted trees
+    with lag features usually match or beat RNNs, as in the M5 competition.
+
+  Alternatives worth considering (all cheap):
+  1. Keep LightGBM and keep improving features. You're already doing this, and
+     it's the right default.
+  2. Hawkes process (self-exciting point process): each alert raises the chance
+     of more alerts nearby soon after, and that effect fades over time. This
+     matches how attack waves move between oblasts, and it has very few
+     parameters. It works well as an interpretable baseline or as an extra
+     feature.
+  3. Logistic regression on the same features: it's a sanity check. If it gets
+     close to LightGBM, the features matter more than the model.
+  4. Pretrained time-series models (Chronos, TimesFM): they need no training,
+     but they forecast counts rather than event probabilities, and they're
+     heavier to run on a CPU. Only worth a quick comparison.
+
+  If you want something more for the start model, a Hawkes baseline makes a good
+  comparison point: about an hour of work, and it trains in seconds.
+
+  Nothing is committed yet. I also wrote a ~2 KB weather cache to data/, which
+  is gitignored.
+
+✻ Sautéed for 2m 47s · done 7:23 PM
+
+※ recap: I removed the Model tab from the dashboard and tested weather as a forecast feature; it didn't improve validation results, so I left it out and answered your model questions. Next, open the dashboard once to confirm the tab change, then commit. (disable recaps in /config)
+
+❯ Ok let's play with features, can you list the features that we use right now  
+  (don't write anything else)                                                   
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Start model (START_FEATURES)
+  1. region: oblast (categorical)
+  2. hour_kyiv: hour of day, Kyiv time
+  3. dow_kyiv: day of week, Kyiv time
+  4. min_since_last_end: minutes since the oblast's last alert ended (capped at
+     7 days)
+  5. starts_24h: alerts started in the oblast in the last 24 h
+  6. starts_7d: alerts started in the oblast in the last 7 days
+  7. n_active_oblasts: oblasts on alert right now
+  8. national_starts_1h: alerts started nationwide in the last hour
+  9. nb_active_frac: share of neighbouring oblasts on alert right now
+  10. nb_starts_1h: alerts started in neighbouring oblasts in the last hour
+
+  Duration model (DURATION_FEATURES)
+  1. region: oblast
+  2. hour_sin, hour_cos: hour of day (cyclical)
+  3. n_active_oblasts: oblasts on alert when the alert started
+  4. prev_duration_min: duration of the oblast's previous alert, log-transformed
+     in the model
+
+✻ Sautéed for 6s · done 7:59 PM
+
+❯ Ok I have a couple of ideas, can you try them:                                
+  let's count n_active_oblasts at 5 minutes after the alers starts, because     
+  sometimes they do not start simontaniuosly                                    
+  We can add nb_active_frac for second model too, as well as other features     
+  we can add previous allert duration                                           
+  That's it from me try a couple of new features that may be good for our       
+  models and test weather they trythly are or not.                              
+  Implement the most usefull ones in the main pipeline                          
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● I'll first look at the data, then test the "+5 min" idea carefully—since using
+  n_active_oblasts at start+5 min means the forecast could only be issued 5
+  minutes into the alert, otherwise it's leakage.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Found that 39% of alerts have another oblast starting within 5 minutes,
+  confirming staggered starts, while 11% end before 5 minutes, so scoring should
+  condition on duration > 5 min. Next I'll build a validation-only script
+  testing each candidate addition separately and refit the start-model baseline
+  across several seeds to gauge random variation in the score.
+
+● Write(exploration/05_feature_ideas.py)
+  ⎿  Wrote 201 lines to exploration/05_feature_ideas.py
+      1 """Candidate features for both models, scored on the VALIDATION w
+      2 
+      3 Start model: each candidate is added to START_FEATURES on its own
+      4 baseline is also refit with several seeds to show how much log lo
+        ss moves by chance.
+        f the median / 80% interval coverage, for
+      6   (a) a forecast issued at the alert start (as now), and
+        active at 5 min, fit with left truncation
+      8       at 5 min, scored conditionally on lasting > 5 min. Features
+      9 All candidates use 
+     … +270 lines (ctrl+o to expand)
+
+● Bash(sed -i '/placeholder, replaced below/d' exploration/05_feature_ideas.py
+      && systemd-run --user --scope -q -p MemoryMax=3G -p MemorySwapMax=0
+      /usr/bin/time -f "%e…)
+  ⎿  === DURATION, forecast issued at start + 0 min (31369 train / 1869 val
+     id alerts) ===
+     variant                        loglik       Δ    MAE  MedAE  cov80  si
+     … +32 lines (ctrl+o to expand)
+  ⎿  Updated exploration/05_feature_ideas.py (+0 -1)
+       96      b_ll = base[0]
+       97      print(f"baseline log loss over 5 seeds: {np.round(base, 4)
+           }  (sd {np.std(base):.4f})")
+       98      print(f"{'variant':28s} {'rounds':>6s} {'logloss':>8s} {'Δ
+           ':>8s} {'auc':>6s} {'pr_auc':>6s}")
+       99 -    cands = [c for c in start_candidates.__code__.co_consts if
+          - False]  # placeholder, replaced below                        
+       99      cands = ["national_starts_15m", "national_starts_3h", "d_a
+           ctive_1h", "prev_duration_log",
+      100               "min_since_last_start", "nb_starts_3h", "starts_s
+           ame_hour_7d"]
+      101      for name, fs in [("current", START_FEATURES)] + [(f"+{c}",
+            START_FEATURES + [c]) for c in cands]:
+
+● prev_duration_log clearly improves the start model, while national_starts_1h,
+  gap_log, and starts_24h each help the duration model; n_active_oblasts at
+  +5min and nb_active_frac add little or hurt. I'll now revalidate these winners
+  on a second, earlier window with day-level bootstrap intervals to rule out
+  validation-window luck before adopting them.
+
+  Read 1 file (ctrl+o to expand)
+
+● I'm adding a second validation window, combination variants and day-level
+  bootstrap intervals to the experiment script, to check the winners hold up.
+
+● Bash(python3 - <<'EOF'
+      from pathlib import Path…)
+  ⎿  [1]-  Done                    systemd-run --user --scope -q -p MemoryM
+     ax=3G -p MemorySwapMax=0 env PYTHONPATH=. uv run python exploration/05
+     _feature_ideas.py --shift $sh 2>&1 | grep -v -i "warn" > /tmp/claude-1
+     … +119 lines (ctrl+o to expand)
+  ⎿  Updated exploration/05_feature_ideas.py (+48 -13)
+       8        at 5 min, scored conditionally on lasting > 5 min. Featur
+          es may then use everything known at start+5.
+       9  All candidates use only alerts started before the issue time an
+          d end times already in the past.
+      10  
+      11 -Usage: PYTHONPATH=. uv run python exploration/05_feature_ideas.
+         -py                                                             
+      11 +Robustness: Δ columns come with a 90% bootstrap interval that r
+         +esamples whole days of the validation window                   
+      12 +(alerts come in waves, so single rows aren't independent). ``--
+         +shift 14`` moves train/validation 14 days                      
+      13 +earlier, to check that a gain is not a property of one particul
+         +ar fortnight.                                                  
+      14 +                                                               
+      15 +Usage: PYTHONPATH=. uv run python exploration/05_feature_ideas.
+         +py [--shift DAYS]                                              
+      16  """
+      17 +import argparse                                                
+      18 +                                                               
+      19  import numpy as np
+      20  import pandas as pd
+      21  from lifelines import LogNormalAFTFitter
+     ...
+      50      return np.where(j > 0, (c[j] - c[lo]) / np.maximum(j - lo, 
+          1), np.nan)
+      51  
+      52  
+      53 +def day_ci(diff: np.ndarray, days: np.ndarray, n: int = 1000, s
+         +eed: int = 0) -> tuple[float, float]:                          
+      54 +    """90% interval of mean(diff), resampling whole days."""   
+      55 +    df = pd.DataFrame({"d": diff, "day": days}).groupby("day").
+         +d.agg(["sum", "size"])                                         
+      56 +    rng = np.random.default_rng(seed)                          
+      57 +    k = rng.integers(0, len(df), (n, len(df)))                 
+      58 +    means = df["sum"].to_numpy()[k].sum(1) / df["size"].to_nump
+         +y()[k].sum(1)                                                  
+      59 +    return tuple(np.quantile(means, [0.05, 0.95]))             
+      60 +                                                               
+      61 +                                                               
+      62  def n_active_at(per, t):
+      63      return sum(_active_at(s, e, t).astype(int) for s, e, _ in p
+          er.values())
+      64  
+     ...
+      104              b, _ = start_model.fit_with_validation(feats[tr], 
+           y[tr], feats[va], y[va], features=fs)
+      105          finally:
+      106              start_model.PARAMS["seed"] = old
+       92 -        return b.best_iteration, start_model.metrics(y[va], st
+          -art_model.predict(b, feats[va]), "v")                         
+      107 +        p = np.clip(start_model.predict(b, feats[va]), 1e-6, 1
+          + - 1e-6)                                                      
+      108 +        rows = -(y[va] * np.log(p) + (1 - y[va]) * np.log(1 - 
+          +p))                                                           
+      109 +        return b.best_iteration, start_model.metrics(y[va], p,
+          + "v"), rows                                                   
+      110  
+      111      print("\n=== START MODEL (validation, calm oblast-hours) =
+           ==")
+      112      base = [score(START_FEATURES, s)[1]["v_logloss"] for s in 
+           range(5)]
+     … 79 more lines (ctrl+o to expand)
+
+● Both validation windows confirm the same conclusions: adopt prev_duration_log
+  for start model and the four-feature set for duration model, while rejecting
+  the extra feature and n_active_oblasts as noise. I'll now add these winners to
+  training/features.py and the duration model's design matrix.
+
+● Bash(python3 - <<'EOF'
+      from pathlib import Path…)
+  ⎿  training/duration_model.py:15:NUMERIC = ["hour_sin", "hour_cos", "n_ac
+     tive_oblasts", "log_prev_duration",
+  ⎿  Updated training/features.py (+30 -4)
+      19  START_FEATURES = [
+      20      "region", "hour_kyiv", "dow_kyiv", "min_since_last_end",
+      21      "starts_24h", "starts_7d", "n_active_oblasts", "national_st
+          arts_1h",
+      22 -    "nb_active_frac", "nb_starts_1h",                          
+      22 +    "nb_active_frac", "nb_starts_1h", "prev_duration_log",     
+      23  ]
+      24 -DURATION_FEATURES = ["region", "hour_sin", "hour_cos", "n_activ
+         -e_oblasts", "prev_duration_min"]                               
+      24 +# Additions over the first version (region, hour, n_active_obla
+         +sts, prev_duration_min) were chosen on two                     
+      25 +# validation windows in exploration/05_feature_ideas.py.       
+      26 +DURATION_FEATURES = ["region", "hour_sin", "hour_cos", "n_activ
+         +e_oblasts", "prev_duration_min",                               
+      27 +                     "national_starts_1h", "starts_24h", "min_s
+         +ince_last_end", "nb_active_frac"]                              
+      28  
+      29  
+      30  def _ns(ts) -> np.ndarray:
+     ...
+      68      frames = []
+      69      for r, (s, e) in per_region.items():
+      70          # ends of alerts that are already over at t (ongoing on
+          es have end = int64 max)
+      68 -        finished_ends = np.sort(e[e != np.iinfo(np.int64).max])
+      71 +        fin = e != np.iinfo(np.int64).max                      
+      72 +        order = np.argsort(e[fin])                             
+      73 +        finished_ends, finished_dur = e[fin][order], (e[fin] - 
+         +s[fin])[order] / 6e10                                          
+      74          j = np.searchsorted(finished_ends, t, side="right") - 1
+      75          last_end = finished_ends[np.maximum(j, 0)] if len(finis
+          hed_ends) else np.zeros(len(t), dtype=np.int64)
+      76          gap = np.where(j >= 0, (t - last_end) / 6e10, MAX_GAP_M
+          IN)
+      77 +        # duration of the last alert that had already ended by 
+         +t (NaN if none; LightGBM handles it)                           
+      78 +        last_dur = np.where(j >= 0, finished_dur[np.maximum(j, 
+         +0)], np.nan) if len(finished_ends) else np.full(len(t), np.nan)
+      79          nbs = [n for n in NEIGHBORS.get(r, []) if n in per_regi
+          on]  # modelled neighbours only
+      80          frames.append(pd.DataFrame({
+      81              "t": times,
+     ...
+       94              "national_starts_1h": national_1h,
+       95              "nb_active_frac": sum(active[n] for n in nbs) / ma
+           x(len(nbs), 1),
+       96              "nb_starts_1h": sum(starts_1h[n] for n in nbs) if 
+           nbs else np.zeros(len(t), dtype=int),
+       97 +            "prev_duration_log": np.log1p(last_dur),          
+       98          }))
+       99      out = pd.concat(frames, ignore_index=True)
+      100      out["region"] = pd.Categorical(out.region, categories=regi
+           ons)
+     ...
+      115      """Features for alerts in ``events`` (columns region, star
+           ted_at), known at their start time."""
+      116      t = _ns(events.started_at)
+      117      per_region = {r: _intervals(alerts, r) for r in regions}
+      110 -    n_active = sum(_active_at(s, e, t).astype(int) for s, e in
+          - per_region.values())                                         
+     … 35 more lines (ctrl+o to expand)
+  ⎿  Updated training/duration_model.py (+6 -1)
+      12  from lifelines.utils import concordance_index
+      13  from scipy.stats import norm
+      14  
+      15 -NUMERIC = ["hour_sin", "hour_cos", "n_active_oblasts", "log_pre
+         -v_duration"]                                                   
+      15 +NUMERIC = ["hour_sin", "hour_cos", "n_active_oblasts", "log_pre
+         +v_duration",                                                   
+      16 +           "log_national_starts_1h", "log_starts_24h", "log_min
+         +_since_last_end", "nb_active_frac"]                            
+      17  
+      18  
+      19  def design_matrix(feats: pd.DataFrame, regions: list[str]) -> p
+          d.DataFrame:
+     ...
+      23      X["hour_sin"], X["hour_cos"] = feats.hour_sin, feats.hour_c
+          os
+      24      X["n_active_oblasts"] = feats.n_active_oblasts.astype(float
+          )
+      25      X["log_prev_duration"] = np.log1p(feats.prev_duration_min)
+      26 +    X["log_national_starts_1h"] = np.log1p(feats.national_start
+         +s_1h)                                                          
+      27 +    X["log_starts_24h"] = np.log1p(feats.starts_24h)           
+      28 +    X["log_min_since_last_end"] = np.log1p(feats.min_since_last
+         +_end)                                                          
+      29 +    X["nb_active_frac"] = feats.nb_active_frac.astype(float)   
+      30      return X
+      31  
+      32  
+
+● I'll save the current metrics for comparison before retraining, then verify
+  the pipeline reproduces the expected results (validation log-likelihood going
+  from −4.3638 to about −4.3377).
+
+● Bash(SP=/tmp/claude-1000/-home-vumenira-projects-Air-raid-alert-analysis/94a6b
+      5e6-8eb2-4dc6-992b-3c8f3e36e128/scratchpad; cp models/metrics.json
+      $SP/metrics_before.j…)
+  ⎿  -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.htm
+     l
+     4 passed, 5 warnings in 34.97s
+     … +44 lines (ctrl+o to expand)
+  ⎿  Updated models/duration_model.json (+33 -29)
+      25    "Zaporizka oblast",
+      26    "Zhytomyrska oblast"
+      27   ],
+      28 - "mu_intercept": 3.0119269240101536,                           
+      28 + "mu_intercept": 3.231382529546987,                            
+      29   "mu_coef": {
+      30 -  "region=Chernihivska oblast": 0.07762426506263864,           
+      31 -  "region=Chernivetska oblast": 0.5159987917682747,            
+      32 -  "region=Dnipropetrovska oblast": -0.7355125711464744,        
+      33 -  "region=Donetska oblast": 0.6336346160945968,                
+      34 -  "region=Ivano-Frankivska oblast": 0.26442691880359515,       
+      35 -  "region=Kharkivska oblast": -0.5934470712094099,             
+      36 -  "region=Khersonska oblast": -0.18528171966712115,            
+      37 -  "region=Khmelnytska oblast": 0.33378935505946666,            
+      38 -  "region=Kirovohradska oblast": 0.04401094401982208,          
+      39 -  "region=Kyiv City": -0.09003230941243141,                    
+      40 -  "region=Kyivska oblast": -0.34275612885474965,               
+      41 -  "region=Lvivska oblast": 0.11421929450205622,                
+      42 -  "region=Mykolaivska oblast": -0.1916672329060719,            
+      43 -  "region=Odeska oblast": -0.4591192326686649,                 
+      44 -  "region=Poltavska oblast": 0.04295741613662001,              
+      45 -  "region=Rivnenska oblast": 0.25234544296891365,              
+      46 -  "region=Sumska oblast": -0.2224213936770347,                 
+      47 -  "region=Ternopilska oblast": 0.38520075219282884,            
+      48 -  "region=Vinnytska oblast": 0.011149732340887675,             
+      49 -  "region=Volynska oblast": 0.4880746084828467,                
+      50 -  "region=Zakarpatska oblast": 0.43079937601619467,            
+      51 -  "region=Zaporizka oblast": 0.2607837586800174,               
+      52 -  "region=Zhytomyrska oblast": 0.0500550448913589,             
+      53 -  "hour_sin": 0.09905763310774982,                             
+      54 -  "hour_cos": 0.14542094887924956,                             
+      55 -  "n_active_oblasts": -0.016878433940663913,                   
+      56 -  "log_prev_duration": 0.08321315113962593                     
+      30 +  "region=Chernihivska oblast": 0.15231854715696902,           
+      31 +  "region=Chernivetska oblast": 0.35598848420093687,           
+      32 +  "region=Dnipropetrovska oblast": -0.6022925874720026,        
+      33 +  "region=Donetska oblast": 0.6867718750684263,                
+      34 +  "region=Ivano-Frankivska oblast": 0.1006564390855241,        
+      35 +  "region=Kharkivska oblast": -0.44361343274097853,            
+      36 +  "region=Khersonska oblast": -0.13071400995630073,            
+     … 29 more lines (ctrl+o to expand)
+  ⎿  … 3 more files changed
+
+● The reproduced pipeline matches the experiment closely—duration validation
+  log-likelihood matches exactly, and start-model validation log loss is nearly
+  identical (0.4341 vs 0.4342, a tiny difference from column-order effects on
+  LightGBM's tree selection). Now scoring the comparison on the test period.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The test period shows improvement on every metric over the same window as
+  before. Next, I'll smoke-test the dashboard by having the server call
+  duration_features and start_features itself in both replay and Now mode.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● All endpoints—replay, region, glance, and Now mode—are working, with exit 144
+  just being pkill matching its own shell as before. Now I'll update the README
+  results and CLAUDE.md notes.
+
+● Bash(python3 - <<'EOF'
+      from pathlib import Path…)
+  ⎿  ?? .gitignore
+     ?? CLAUDE.md
+     ?? README.md
+     … +8 lines (ctrl+o to expand)
+  ⎿  Updated README.md (+9 -4)
+      33  
+      34  | | Model | Baseline |
+      35  |---|---|---|
+      36 -| Start: Brier ↓ | 0.152 | 0.168 |                             
+      37 -| Start: ROC-AUC ↑ | 0.770 | 0.730 |                           
+      38 -| Start: PR-AUC ↑ | 0.520 | 0.479 |                            
+      39 -| Duration: MAE of median ↓ | 19.3 min | 19.5 min |            
+      36 +| Start: Brier ↓ | 0.150 | 0.168 |                             
+      37 +| Start: ROC-AUC ↑ | 0.784 | 0.730 |                           
+      38 +| Start: PR-AUC ↑ | 0.529 | 0.479 |                            
+      39 +| Duration: MAE of median ↓ | 18.8 min | 19.5 min |            
+      40  | Duration: 80% interval coverage | 81% | – |
+      41  
+      42 +Feature selection (validation only, two different 14-day window
+         +s, 90% bootstrap intervals by day: `exploration/05_feature_idea
+         +s.py`):                                                        
+      43 +- Start model: adding the duration of the oblast's last finishe
+         +d alert (`prev_duration_log`) lowers validation log loss by abo
+         +ut 0.004 in both windows. Seven other candidates did nothing.  
+      44 +- Duration model: national starts in the last hour, the oblast'
+         +s starts in the last 24 h, time since its last alert, and the s
+         +hare of neighbours on alert raise validation log-likelihood by 
+         +about 0.025 together.                                          
+      45 +- Rejected: weather (`exploration/03_*`, `04_*`), and counting 
+         +oblasts on alert 5 min after the start (it requires issuing the
+         + forecast 5 min later, and was slightly worse).                
+      46 +                                                               
+      47  ## Layout
+      48  
+      49  ```
+  ⎿  Updated CLAUDE.md (+2 -1)
+      33  - Neighbour features use `training/neighbors.json`, generated f
+          rom the map polygons by `training/build_neighbors.py`. Odesa↔Kh
+          erson is an edge across the estuary, not a land border.
+      34  - Raw `hour_kyiv`/`dow_kyiv` beat sin/cos encoding for LightGBM
+           on validation (see `exploration/02_feature_ablation.py`); the 
+          sin/cos columns exist but aren't model inputs. `num_threads=4`:
+           8 threads crawl on this 4-core laptop when the CPU is busy.
+      35  - Weather was tested and rejected for the start model (validati
+          on only, 2026-10-12): Open-Meteo *historical-forecast* API (no 
+          key, leakage-safe because it stores archived forecasts) at obla
+          st centroids (`exploration/03_weather_oblast.py`) and at drone 
+          launch areas (`exploration/04_weather_launch_sites.py`). Launch
+          -area visibility/cloud correlate with national activity (|ρ|≈0.
+          27), but log loss doesn't improve at the 1 h horizon. Revisit o
+          nly for longer horizons (6–24 h).
+      36 -- **Model 2** (`duration_model.py`): lifelines log-normal AFT. 
+         -Only its coefficients are exported to `models/duration_model.js
+         -on`, and prediction (quantiles and survival curves conditioned 
+         -on elapsed time) is closed-form numpy/scipy, checked against li
+         -felines at train time.                                         
+      36 +- Feature candidates for both models are scored by `exploration
+         +/05_feature_ideas.py` (validation only; `--shift 14` re-runs on
+         + the previous fortnight; Δ comes with a day-block bootstrap CI)
+         +. Adopt a feature only if it wins in both windows. Seed-to-seed
+         + noise of the start model is ~0.0001 log loss, but day-to-day s
+         +ampling noise is ~0.001–0.002.                                 
+      37 +- **Model 2** (`duration_model.py`): lifelines log-normal AFT. 
+         +Inputs: region, hour, n_active_oblasts, previous duration, nati
+         +onal starts 1 h, oblast starts 24 h, time since the last alert,
+         + neighbours on alert (log1p transforms in `design_matrix`). Onl
+         +y its coefficients are exported to `models/duration_model.json`
+         +, and prediction (quantiles and survival curves conditioned on 
+         +elapsed time) is closed-form numpy/scipy, checked against lifel
+         +ines at train time.                                            
+      38  - `app/server.py` (FastAPI) imports `training.features` so live
+           predictions use the same feature code. Replay mode reads `mode
+          ls/replay_*.parquet`. Now mode re-downloads the CSV (at most ho
+          urly) and overrides `active_now` / `n_active_oblasts` with the 
+          live ubilling feed.
+      39  - `app/static/` is a no-build dashboard (d3 v7 from cdnjs). The
+           map uses a planar `geoTransform` (x·cos 48.5°), because geoBou
+          ndaries polygon winding breaks d3's spherical projections.
+      40  - Region names are mapped dataset ↔ geoBoundaries ↔ ubilling in
+           `app/regions.py`. Luhansk is excluded from modelling (`data.EX
+          CLUDED_REGIONS`); it has only pre-April-2022 rows.
+
+● I tested your three ideas plus 12 of my own, and added the five features that
+  held up to the main pipeline. Both models improved on the test period; nothing
+  is committed yet.
+
+  How I tested: each feature was added to the current set on its own and scored
+  on validation only. I repeated everything on a second, earlier 14-day window,
+  with intervals that resample whole days (alerts come in waves). A feature had
+  to win in both windows to be adopted. The script is
+  exploration/05_feature_ideas.py.
+
+  Your ideas:
+  - Counting oblasts on alert 5 min after the start: rejected. It was slightly
+    worse in both windows (−0.004 and −0.002 log-likelihood). It would also
+    force the forecast to be issued 5 minutes into the alert, and 11% of alerts
+    are already over by then. Starts are often staggered (39% of alerts have
+    another oblast starting within 5 min), but n_active_oblasts and "national
+    starts in the last hour" already capture that.
+  - Neighbours on alert in the duration model: adopted. Alone it's a small gain,
+    but it adds a little on top of the other new features in both windows.
+  - Previous alert duration: the duration model already had it. Added to the
+    start model (as prev_duration_log), it was the only start feature that
+    clearly helped, in both windows.
+
+  Adopted:
+  - Start model: prev_duration_log. The seven other candidates I tried did
+    nothing, so I kept it simple.
+  - Duration model: national_starts_1h, starts_24h (in this oblast), time since
+    this oblast's last alert, and nb_active_frac. Together they raise validation
+    log-likelihood by about 0.025 in both windows.
+
+  Test period (14 Sep – 12 Oct, scored once, after retraining):
+
+  ┌─────────────────────────────────┬──────────┬──────────┬──────────┐
+  │                                 │  Before  │  After   │ Baseline │
+  ├─────────────────────────────────┼──────────┼──────────┼──────────┤
+  │ Start: log loss ↓               │ 0.463    │ 0.455    │ 0.525    │
+  ├─────────────────────────────────┼──────────┼──────────┼──────────┤
+  │ Start: ROC-AUC ↑                │ 0.769    │ 0.784    │ 0.730    │
+  ├─────────────────────────────────┼──────────┼──────────┼──────────┤
+  │ Start: PR-AUC ↑                 │ 0.520    │ 0.529    │ 0.479    │
+  ├─────────────────────────────────┼──────────┼──────────┼──────────┤
+  │ Duration: log-likelihood ↑      │ −4.240   │ −4.206   │ –        │
+  ├─────────────────────────────────┼──────────┼──────────┼──────────┤
+  │ Duration: MAE of median ↓       │ 19.3 min │ 18.8 min │ 19.5 min │
+  ├─────────────────────────────────┼──────────┼──────────┼──────────┤
+  │ Duration: 80% interval coverage │ 81.0%    │ 81.3%    │ –        │
+  └─────────────────────────────────┴──────────┴──────────┴──────────┘
+
+  The duration model is now clearly better than the per-oblast median baseline.
+  Before this change it was barely better.
+
+  Checks:
+  - The leakage tests pass (4/4), and they now cover the new features.
+  - The training pipeline reproduces the experiment's validation numbers.
+  - The dashboard works in replay, region, glance and Now mode.
+  - Training logged a new W&B run (silver-aardvark-10). README results and
+    CLAUDE.md are updated.
+
+  Training on validation still prefers a Weibull distribution over log-normal
+  for durations, as before. Switching would need new prediction code.
+
+✻ Sautéed for 10m 6s · done 8:15 PM
